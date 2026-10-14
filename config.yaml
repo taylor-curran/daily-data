@@ -1,0 +1,132 @@
+# Accountability system config — habits, projects, modes.
+# Edit freely; run `python -m app.seed` to sync changes into the DB.
+# Removing a habit/variant here deactivates it (history is kept).
+
+modes: [home, office, weekend, travel]
+
+# Things a day can have available; checked against variant `requires`.
+resources: [piano, gym, metronome, kitchen, trainer, climbing_gym]
+
+# What's normally available per mode (you can override at check-in).
+default_available:
+  home: [piano, gym, kitchen, trainer, metronome]
+  office: [piano, gym]
+  weekend: [piano, gym, kitchen]
+  travel: []
+
+habits:
+  piano:
+    name: Piano
+    cadence: daily
+    modes: [home, office, weekend]      # travel is exempt
+    rotation: least_recent_focus        # how the check-in suggests a progress variant
+    default_by_mode: {home: progress, office: app_lesson, weekend: progress}
+    variants:
+      - {id: note_game,   name: Note reading game (phone), requires: [],                 kind: maintenance}
+      - {id: app_lesson,  name: App lesson (scales + short pieces), requires: [piano],   kind: maintenance}
+      - {id: repertoire,  name: Work on the current piece, requires: [piano],            kind: progress, focus: repertoire}
+      - {id: rhythm,      name: Rhythm drill with metronome, requires: [piano, metronome], kind: progress, focus: rhythm}
+      - {id: chords,      name: Chords / harmony day, requires: [piano],                 kind: progress, focus: chords}
+      - {id: post_it,     name: Post-it method on a trouble spot, requires: [piano],     kind: progress, focus: post_it}
+
+  strength:
+    name: Strength
+    cadence: 3x/week
+    modes: [home, office, weekend]
+    default_by_mode: {home: trainer, office: solo_gym, weekend: solo_gym}
+    variants:
+      - {id: one_pullup, name: One pullup,            requires: [],        kind: maintenance}
+      - {id: walk,       name: A walk,                requires: [],        kind: maintenance}
+      - {id: solo_gym,   name: Solo strength session, requires: [gym],     kind: progress}
+      - {id: trainer,    name: Session with trainer,  requires: [trainer], kind: progress}
+
+  climbing:
+    name: Climbing
+    cadence: 1x/week
+    modes: [home, office]
+    variants:
+      - {id: brigid, name: Wednesday with Brigid, requires: [climbing_gym], kind: maintenance}
+      - {id: noah,   name: Tuesday with Noah,     requires: [climbing_gym], kind: maintenance}
+
+  writing:
+    name: Writing
+    cadence: daily
+    modes: [home, office, weekend]
+    default_by_mode: {home: three_lines, office: three_lines, weekend: three_lines}
+    variants:
+      - {id: three_lines, name: Three lines,                 requires: [], kind: maintenance}
+      - {id: ponder,      name: Ad-hoc pondering session,    requires: [], kind: progress, focus: ponder}
+      - {id: obsidian,    name: Obsidian learning note,      requires: [], kind: progress, focus: learning}
+
+  saline:
+    name: Saline rinse
+    cadence: every_2_days
+    modes: [home, office, weekend]
+    variants:
+      - {id: rinse, name: Rinse, requires: [], kind: maintenance}
+
+  supplements:
+    name: Supplements
+    cadence: daily
+    modes: [home, office, weekend, travel]   # the one habit that still counts on travel
+    anchor: after shower, with eye cream
+    variants:
+      - {id: taken, name: Taken, requires: [], kind: maintenance}
+
+  skincare:
+    name: Skincare
+    cadence: daily
+    modes: [home, office, weekend]
+    default_by_mode: {home: serums, office: basics, weekend: basics}
+    variants:
+      - {id: basics, name: Sunscreen + eye cream, requires: [], kind: maintenance}
+      - {id: serums, name: Serums,                requires: [], kind: progress}
+
+  veggies_fruit:
+    name: Veggies + fruit first
+    cadence: daily
+    modes: [home, office, weekend]
+    variants:
+      - {id: veggies,     name: Veggies today (pickled counts),  requires: [], kind: maintenance}
+      - {id: fruit_first, name: Fruit before ice cream tonight, requires: [], kind: maintenance}
+
+  cooking:
+    name: Cooking
+    cadence: 1x/2weeks
+    modes: [home, weekend]
+    default_by_mode: {home: meal_prep, weekend: meal_prep}
+    variants:
+      - {id: meal_prep,  name: Meal prep batch,     requires: [kitchen], kind: maintenance}
+      - {id: pickling,   name: Pickling batch,      requires: [kitchen], kind: maintenance}
+      - {id: new_recipe, name: New recipe attempt,  requires: [kitchen], kind: progress, focus: rotation}
+
+  reading:
+    name: Reading
+    cadence: 2x/week
+    modes: [home, office, weekend]
+    variants:
+      - {id: physical, name: Physical book, requires: [], kind: maintenance}
+      - {id: audio,    name: Audiobook,     requires: [], kind: maintenance}
+
+projects:
+  AD:
+    name: Austin Dynamism (TF recruiting)
+    priority: top
+    spirit: Strong engineers choose TerraFirma and Austin — through relationships, hosting, and a pitch I can deliver cold.
+    status: active
+  NS:
+    name: Noah System (bug tracker + Devin)
+    priority: medium
+    spirit: Be concretely useful to the TF eng team with tooling I already know.
+    status: active
+  ER:
+    name: Ed Robot (learn robotics)
+    priority: low
+    spirit: Curiosity only — does not count as AD work.
+    status: parked
+  GS:
+    name: Gauntlet School
+    status: killed
+  BOOTCAMP:
+    name: Robotics bootcamp / apprenticeship
+    status: parked

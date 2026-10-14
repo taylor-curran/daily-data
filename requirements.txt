@@ -1,0 +1,5 @@
+mcp>=2.0
+sqlalchemy>=2.0
+pyyaml
+psycopg2-binary
+uvicorn

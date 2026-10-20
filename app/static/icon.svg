@@ -1,22 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="128" fill="#F6D8CF"/>
-  <!-- sprout -->
-  <path d="M256 150 C256 128 256 112 256 96" stroke="#6BA368" stroke-width="12" stroke-linecap="round" fill="none"/>
-  <path d="M256 112 C232 78 196 80 186 98 C206 116 236 118 256 112 Z" fill="#8CC084"/>
-  <path d="M256 104 C276 70 314 70 326 88 C306 108 274 112 256 104 Z" fill="#8CC084"/>
-  <!-- body: a soft little day-tile -->
-  <rect x="116" y="146" width="280" height="262" rx="92" fill="#FFF8F0"/>
-  <!-- eyes -->
-  <ellipse cx="206" cy="262" rx="15" ry="19" fill="#3B2F2F"/>
-  <ellipse cx="306" cy="262" rx="15" ry="19" fill="#3B2F2F"/>
-  <circle cx="211" cy="255" r="5" fill="#FFF8F0"/>
-  <circle cx="311" cy="255" r="5" fill="#FFF8F0"/>
-  <!-- cheeks -->
-  <ellipse cx="172" cy="306" rx="24" ry="14" fill="#F2A3A0" opacity=".75"/>
-  <ellipse cx="340" cy="306" rx="24" ry="14" fill="#F2A3A0" opacity=".75"/>
-  <!-- smile -->
-  <path d="M236 306 Q256 326 276 306" stroke="#3B2F2F" stroke-width="9" stroke-linecap="round" fill="none"/>
-  <!-- little check badge -->
-  <circle cx="378" cy="384" r="52" fill="#F4C95D"/>
-  <path d="M354 384 L372 402 L404 368" stroke="#FFF8F0" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <rect width="512" height="512" rx="128" fill="#244A40"/>
+  <!-- a week: one day missed -->
+  <g fill="#F2C76E">
+    <circle cx="124" cy="118" r="18"/><circle cx="190" cy="118" r="18"/><circle cx="256" cy="118" r="18"/><circle cx="388" cy="118" r="18"/>
+  </g>
+  <circle cx="322" cy="118" r="16" fill="none" stroke="#F2C76E" stroke-width="6" opacity=".6"/>
+  <!-- check that grows a sprout at its tip -->
+  <path d="M132 306 L212 380 L360 248" fill="none" stroke="#FFF6EA" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M360 248 C368 230 376 214 382 196" stroke="#FFF6EA" stroke-width="12" stroke-linecap="round" fill="none"/>
+  <path d="M382 200 C386 166 414 148 440 152 C440 182 414 204 382 200 Z" fill="#9BD08F"/>
+  <path d="M378 208 C352 182 322 182 310 198 C328 218 356 220 378 208 Z" fill="#7FBF76"/>
 </svg>

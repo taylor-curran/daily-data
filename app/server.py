@@ -15,7 +15,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from sqlalchemy import select
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
+from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Mount, Route
 
 from .db import init_db, session
@@ -278,6 +278,14 @@ def build_app() -> Starlette:
     async def health(_):
         return JSONResponse({"ok": True})
 
+    static = os.path.join(os.path.dirname(__file__), "static")
+
+    async def favicon(_):
+        return FileResponse(os.path.join(static, "favicon.png"), media_type="image/png")
+
+    async def icon(_):
+        return FileResponse(os.path.join(static, "icon.svg"), media_type="image/svg+xml")
+
     async def nope(_):
         return JSONResponse({"error": "not found"}, status_code=404)
 
@@ -317,7 +325,7 @@ def build_app() -> Starlette:
 
     # Token lives in the URL path because claude.ai custom connectors can't set arbitrary headers.
     return Starlette(
-        routes=[Route("/health", health), Mount(f"/{TOKEN}", app=LazyStart(inner)), Route("/{rest:path}", nope)],
+        routes=[Route("/health", health), Route("/favicon.ico", favicon), Route("/favicon.png", favicon), Route("/icon.svg", icon), Mount(f"/{TOKEN}", app=LazyStart(inner)), Route("/{rest:path}", nope)],
         lifespan=lazy_lifespan,
     )
 

@@ -1,7 +1,8 @@
 """MCP server exposing the accountability system.
 
 Run locally:   python -m app.server            (streamable HTTP on :8000)
-Connect from claude.ai as a custom connector at  https://<host>/<ACCESS_TOKEN>/mcp
+Connect from claude.ai as a custom connector at  https://<host>/mcp
+with request header  Authorization: Bearer <ACCESS_TOKEN>
 """
 
 from __future__ import annotations
@@ -314,18 +315,37 @@ def build_app() -> Starlette:
         await ensure_started()
         yield
 
-    class LazyStart:
+    import hmac
+
+    def authorized(scope) -> bool:
+        headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+        auth = headers.get("authorization", "")
+        supplied = auth[7:].strip() if auth.lower().startswith("bearer ") else headers.get("x-access-token", "")
+        return bool(supplied) and hmac.compare_digest(supplied, TOKEN)
+
+    class Guarded:
+        """Requires the token in a header, then lazily starts the MCP session manager."""
+
         def __init__(self, app):
             self.app = app
 
         async def __call__(self, scope, receive, send):
             if scope["type"] == "http":
+                if not authorized(scope):
+                    await JSONResponse({"error": "unauthorized"}, status_code=401)(scope, receive, send)
+                    return
                 await ensure_started()
             await self.app(scope, receive, send)
 
-    # Token lives in the URL path because claude.ai custom connectors can't set arbitrary headers.
     return Starlette(
-        routes=[Route("/health", health), Route("/favicon.ico", favicon), Route("/favicon.png", favicon), Route("/icon.svg", icon), Mount(f"/{TOKEN}", app=LazyStart(inner)), Route("/{rest:path}", nope)],
+        routes=[
+            Route("/health", health),
+            Route("/favicon.ico", favicon),
+            Route("/favicon.png", favicon),
+            Route("/icon.svg", icon),
+            Route("/mcp", endpoint=Guarded(inner), methods=["GET", "POST", "DELETE"]),
+            Route("/{rest:path}", nope, methods=["GET", "POST", "PUT", "DELETE", "PATCH"]),
+        ],
         lifespan=lazy_lifespan,
     )
 

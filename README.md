@@ -31,7 +31,7 @@ Exempt days (travel, `skip_day`) are excluded from every denominator.
 
 ```bash
 pip install -r requirements.txt
-ACCESS_TOKEN=pick-something-long python -m app.server       # http://localhost:8000/<token>/mcp
+ACCESS_TOKEN=pick-something-long python -m app.server       # http://localhost:8000/mcp + Bearer header
 ```
 
 SQLite by default (`accountability.db`). Config syncs from `config.yaml` on every boot;
@@ -52,17 +52,18 @@ Railway works the same: add a Postgres service, set `ACCESS_TOKEN`, deploy from 
 
 ## Connect to claude.ai
 
-Settings → Connectors → Add custom connector → URL:
+Settings → Connectors → Add custom connector:
 
-```
-https://<your-app>.fly.dev/<ACCESS_TOKEN>/mcp
-```
+- URL: `https://<your-app>.vercel.app/mcp`
+- Authentication: **No sign-in**
+- Request headers → Add header: `Authorization` = `Bearer <ACCESS_TOKEN>`
 
-No OAuth. The token in the path is the auth, because the connector UI can't set headers.
-Treat the URL as a password. Once connected, voice mode can call the tools; the server's
-`instructions` tell Claude how to run a check-in, so nothing else needs configuring.
+The URL itself isn't secret; requests without the header get a 401. (`X-Access-Token: <token>`
+also works, for clients that can't send `Authorization`.) Once connected, voice mode can call the
+tools; the server's `instructions` tell Claude how to run a check-in.
 
-Say "start my check-in" / "let's do the weekly review".
+First check after connecting: ask Claude to list the connector's tools. You should see ten.
+Then say "start my check-in" / "let's do the weekly review".
 
 ## Editing habits
 

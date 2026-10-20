@@ -6,7 +6,16 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./accountability.db")
+DATABASE_URL = (
+    os.environ.get("DATABASE_URL")
+    or os.environ.get("POSTGRES_URL")  # Vercel/Neon integration sometimes uses this name
+    or ("" if os.environ.get("VERCEL") else "sqlite:///./accountability.db")
+)
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not set. On Vercel: Storage -> connect a Postgres (Neon) database, then Redeploy. "
+        "(SQLite can't work here: the filesystem is read-only.)"
+    )
 # Fly/Railway hand out postgres:// ; SQLAlchemy wants postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)

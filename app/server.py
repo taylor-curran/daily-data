@@ -49,7 +49,9 @@ record_reflection. Never invent numbers; quote the ones returned.
 Outcomes are binary: set with set_outcome, finish with complete_outcome. One active per target.
 """
 
-TOKEN = os.environ.get("ACCESS_TOKEN", "dev-token")
+TOKEN = os.environ.get("ACCESS_TOKEN") or ("" if os.environ.get("VERCEL") else "dev-token")
+if not TOKEN:
+    raise RuntimeError("ACCESS_TOKEN is not set. On Vercel: Settings -> Environment Variables, add it, then Redeploy.")
 mcp = MCPServer("accountability", instructions=INSTRUCTIONS)
 
 
@@ -297,6 +299,9 @@ def build_app() -> Starlette:
             state["task"] = asyncio.create_task(_runner(state["ready"]))
         await state["ready"].wait()
 
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
     async def lazy_lifespan(app):
         await ensure_started()
         yield

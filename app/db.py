@@ -17,8 +17,12 @@ if not DATABASE_URL:
         "(SQLite can't work here: the filesystem is read-only.)"
     )
 # Fly/Railway hand out postgres:// ; SQLAlchemy wants postgresql://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# Normalize to the driver we actually install (psycopg2). SQLAlchemy 2.1 maps bare
+# postgresql:// to psycopg (v3), which isn't installed.
+for prefix in ("postgres://", "postgresql://"):
+    if DATABASE_URL.startswith(prefix):
+        DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len(prefix):]
+        break
 
 from sqlalchemy.pool import NullPool  # noqa: E402
 

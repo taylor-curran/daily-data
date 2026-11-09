@@ -20,7 +20,7 @@ from typing import Optional
 from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class Base(DeclarativeBase):
@@ -41,7 +41,6 @@ class Habit(Base):
     name: Mapped[str] = mapped_column(String(100))
     cadence: Mapped[str] = mapped_column(String(20))  # daily | every_N_days | Nx/week | Nx/2weeks | Nx/month
     track: Mapped[str] = mapped_column(String(12), default="adherence")  # adherence | count
-    modes: Mapped[list] = mapped_column(JSON, default=list)  # modes where this habit is expected
     rotation: Mapped[Optional[str]] = mapped_column(String(30))
     default_variant: Mapped[Optional[str]] = mapped_column(String(40))  # variant key, or "progress"
     target: Mapped[Optional[str]] = mapped_column(String(200))  # e.g. the piece being learned
@@ -57,7 +56,6 @@ class Variant(Base):
     habit_id: Mapped[str] = mapped_column(ForeignKey("habits.id"))
     key: Mapped[str] = mapped_column(String(40))
     name: Mapped[str] = mapped_column(String(100))
-    requires: Mapped[list] = mapped_column(JSON, default=list)
     kind: Mapped[str] = mapped_column(String(12))  # maintenance | progress
     focus: Mapped[Optional[str]] = mapped_column(String(40))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -74,7 +72,6 @@ class Measure(Base):
     levels: Mapped[list] = mapped_column(JSON, default=list)  # scale only: ["none", "some", "a lot"]
     unit: Mapped[Optional[str]] = mapped_column(String(30))
     direction: Mapped[str] = mapped_column(String(8), default="down")  # which way is good
-    modes: Mapped[list] = mapped_column(JSON, default=list)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -94,12 +91,10 @@ class Arc(Base):
 
 
 class Day(Base):
+    """A day exists iff it had a debrief. Days with no row are null days — not counted against anything."""
+
     __tablename__ = "days"
     date: Mapped[date] = mapped_column(Date, primary_key=True)
-    mode: Mapped[Optional[str]] = mapped_column(String(16))
-    exempt: Mapped[bool] = mapped_column(Boolean, default=False)
-    exempt_reason: Mapped[Optional[str]] = mapped_column(String(200))
-    available: Mapped[list] = mapped_column(JSON, default=list)
 
 
 class Debrief(Base):

@@ -17,17 +17,15 @@ from app.db import session  # noqa: E402
 from app.models import ActionItem, Arc, Habit  # noqa: E402
 
 START = date(2026, 11, 2)  # a Monday
-PATTERN = {0: "home", 1: "office", 2: "office", 3: "home", 4: "office", 5: "weekend", 6: "weekend"}
 
 
 def day(n):
     return START + timedelta(days=n)
 
 
-def run_day(n, habits=None, measures=None, travel=False):
+def run_day(n, habits=None, measures=None):
     os.environ["FAKE_TODAY"] = day(n).isoformat()
-    mode = "travel" if travel else PATTERN[day(n).weekday()]
-    r = server.start_debrief(mode=mode)
+    r = server.start_debrief()
     entries = []
     for h in r["habits"]:
         spec = (habits or {}).get(h["habit"])
@@ -57,7 +55,8 @@ with session() as s_:
     for i in s_.scalars(select(ActionItem)):
         s_.delete(i)
 seed.sync(seed.load_config(), today=START)
-r0 = server.start_debrief(mode="office", day=START.isoformat())
+r0 = server.start_debrief(day=START.isoformat())
+assert r0["open_with"].startswith("Hey Taylor")
 assert {a["arc"] for a in r0["arcs"]} == {"AD", "WEDDING"}, r0["arcs"]
 ad = next(a for a in r0["arcs"] if a["arc"] == "AD")
 assert len(ad["open_items"]) == 5, "AD seed items"
@@ -84,10 +83,13 @@ assert res["ok"] and len(res["added"]) == 1, res
 server.add_todos(["Order steel-toed boots for Noah", "Find a good place to order brisket"])
 server.log_content([{"text": "CEO interview on competitive edge", "kind": "listened", "note": "the 'vertical integration' line"}])
 
-# Week 2: travel Tue/Wed; flashcards+ovasitol continue on travel; drills+app collapse; picking down; wedding untouched
+# Week 2: Tue is a null day (no debrief); Wed is a thin day (flashcards + ovasitol only, on a trip);
+# drills+app collapse; picking down; wedding untouched
 for n in range(7, 14):
-    if day(n).weekday() in (1, 2):
-        run_day(n, {"piano_flashcards": "piano_flashcards:done", "ovasitol": "ovasitol:taken"}, {"picking": 1, "phone_video": "some"}, travel=True)
+    if day(n).weekday() == 1:
+        continue  # null day: no debrief at all
+    if day(n).weekday() == 2:
+        run_day(n, {"piano_flashcards": "piano_flashcards:done", "ovasitol": "ovasitol:taken"}, {"picking": 1, "phone_video": "some"})
         continue
     h = {"piano_flashcards": "piano_flashcards:done", "piano_drills": "skip", "piano_app": "skip",
          "ovasitol": "ovasitol:taken", "saline": "saline:rinse", "veggies": "veggies:had"}
@@ -120,9 +122,11 @@ print("  todos open:", [t["text"] for t in rev["todos"]["open"]])
 assert "piano_drills" in rev["off_this_week"] and "piano_app" in rev["off_this_week"], rev["off_this_week"]
 assert "piano_drills" not in rev["drift"], "one bad week is not yet drift"
 fc = next(h for h in rev["habits"] if h["habit"] == "piano_flashcards")
-assert fc["eligible_days"] == 14 and fc["rate"] == 1.0, "travel days count for travel-proof habits"
+assert fc["eligible_days"] == 13 and fc["rate"] == 1.0, "a thin day still counts; a null day doesn't"
+veg = next(h for h in rev["habits"] if h["habit"] == "veggies")
+assert veg["done_days"] == 12 and veg["eligible_days"] == 13, "thin day counts against veggies (not logged = not done)"
 assert "climbing" not in rev["drift"] + rev["off_this_week"], "count habits never drift"
-assert rev["exempt_days"] == 2
+assert rev["logged_days"] == 13 and rev["null_days"] == [day(8).isoformat()], (rev["logged_days"], rev["null_days"])
 assert set(rev["measures_better"]) == {"picking", "phone_video"}
 wedding = next(a for a in rev["arcs"] if a["arc"] == "WEDDING")
 assert "quiet_week" in wedding["flags"], wedding
@@ -132,7 +136,7 @@ hist = server.recent_history(days=14)
 assert hist["content"] and hist["arc_notes"] and hist["action_items_changed"]
 
 # ---- removed tools stay removed; config is the only writer of arc status
-for name in ("set_outcome", "complete_outcome", "set_project_status"):
+for name in ("set_outcome", "complete_outcome", "set_project_status", "skip_day"):
     assert not hasattr(server, name)
 cfg = seed.load_config()
 cfg["arcs"]["WEDDING"]["status"] = "backburner"

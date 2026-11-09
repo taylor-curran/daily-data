@@ -19,14 +19,16 @@ Config is the *shape*: it only changes by editing `config.yaml` and pushing (Ver
 syncs on boot). Everything that *happens* is data and is written by conversations. Conversations
 never write config; if asked to, Claude says so and adds a todo.
 
-Habits and measures carry `modes`: a habit that lists `travel` (flashcards, ovasitol) still counts
-on travel days; the rest are exempt. `skip_day` exempts everything.
+There is no notion of where you were. A day counts if it had a debrief; a day with no debrief is a
+null day and counts against nothing. A thin day (flashcards only, on a trip) is just a thin day.
 
 ## Conversations
 
-- **Daily debrief** (`start_debrief` → `log_entries` + friends): mode → habits (suggested variant
-  first; drills rotate through fingerpower / scales / rhythm by least-recent) → measures → one line
-  per active arc → todos → "anything that stuck with you today?". Under five minutes.
+- **Daily debrief** ("let's do my debrief"): opens broad — *talk me through today: what was on your
+  mind, what did you get to, what did you want to and didn't* — and Claude maps the story onto arcs,
+  todos, habits and content as it goes. Then one light line on any arc that didn't come up, content
+  if it didn't, and a batched rapid-fire sweep of whatever habits and measures are still missing.
+  One-line readback. Under five minutes.
 - **Strategy session** ("let's talk AD"): `get_arc`, then rubber-ducking — what's blocking, what to
   sequence or cut, "want to write it out?" — saved via `update_action_items` and `add_arc_note`.
 - **Weekly review** (`weekly_review`): leads with `off_this_week`, `drift`, measures that moved,
@@ -36,7 +38,7 @@ Review signals:
 
 | flag | meaning |
 |---|---|
-| `off_this_week` | this week's done-days < 50% of what the cadence expects (fast signal) |
+| `off_this_week` | this week's done-days < 50% of what the cadence expects, over days that had a debrief (fast signal) |
 | `drift` | 4-week rate < 60% (slow signal) |
 | measure `trend` | this week's average vs the prior 3 weeks, in the configured `direction` |
 | `quiet_week` | active arc with no item added/closed and no note for 7+ days |
@@ -75,7 +77,7 @@ Settings → Connectors → Add custom connector:
 - Request headers → `Authorization` = `Bearer <ACCESS_TOKEN>`
 
 Requests without the header get a 401. First check after connecting: ask Claude to list the
-connector's tools — there are 14.
+connector's tools — there are 13.
 
 ## Reading your data
 

@@ -11,21 +11,13 @@
 #   todos     one-off housekeeping                           (data only, nothing to configure)
 #   content   what you read/listened to that stuck           (data only)
 
-modes: [home, office, weekend, travel]
-
-# Physical things a day may or may not have. Checked against variant `requires`.
-resources: [piano, gym, trainer]
-default_available:
-  home: [piano, gym, trainer]
-  office: [piano, gym]
-  weekend: [piano, gym]
-  travel: []
+# There is no notion of where you were. A day counts if it had a debrief; a day with no debrief is a
+# null day. A thin day (flashcards only, on a trip) is just a thin day.
 
 # ---------------------------------------------------------------- habits
 #
 # cadence:  daily | every_N_days | Nx/week | Nx/2weeks | Nx/month
 # track:    adherence (default; drift flag when below cadence) | count (just count it, no drift flag)
-# modes:    where the habit is expected; omit travel to make travel exempt for it
 # default:  variant key to lead with, or "progress" = most-overdue progress focus (needs rotation)
 # target:   free text shown at debrief, e.g. the piece being learned
 
@@ -34,29 +26,26 @@ habits:
     name: Piano flashcards
     group: piano
     cadence: daily
-    modes: [home, office, weekend, travel]     # phone app — no excuse
     variants:
-      - {id: done, name: Flashcards session, requires: []}
+      - {id: done, name: Flashcards session}
 
   piano_drills:
     name: Piano drills
     group: piano
     cadence: 3x/week
-    modes: [home, office, weekend]
     rotation: least_recent_focus
     default: progress
     variants:
-      - {id: fingerpower, name: Fingerpower,       requires: [piano], kind: progress, focus: fingerpower}
-      - {id: scales,      name: Scales,            requires: [piano], kind: progress, focus: scales}
-      - {id: rhythm,      name: Rhythm exercises,  requires: [piano], kind: progress, focus: rhythm}
+      - {id: fingerpower, name: Fingerpower, kind: progress, focus: fingerpower}
+      - {id: scales,      name: Scales, kind: progress, focus: scales}
+      - {id: rhythm,      name: Rhythm exercises, kind: progress, focus: rhythm}
 
   piano_app:
     name: Piano app song
     group: piano
     cadence: 3x/week
-    modes: [home, office, weekend]
     variants:
-      - {id: new_song, name: New micro song in the app, requires: [piano]}
+      - {id: new_song, name: New micro song in the app}
 
   piano_piece:
     name: Piano piece
@@ -64,52 +53,46 @@ habits:
     active: false            # flip on when flashcards feel solid; set `target` to the piece
     target: ""
     cadence: 2x/week
-    modes: [home, office, weekend]
     variants:
-      - {id: practice, name: Work on the piece, requires: [piano], kind: progress}
+      - {id: practice, name: Work on the piece, kind: progress}
 
   strength:
     name: Strength
     cadence: 3x/week          # later: per-exercise logging (split squats @ N lbs) as measures
-    modes: [home, office, weekend]
     default: progress
     variants:
-      - {id: trainer,    name: Session with trainer,  requires: [trainer], kind: progress}
-      - {id: solo_gym,   name: Solo strength session, requires: [gym],     kind: progress}
-      - {id: one_pullup, name: One pullup,            requires: []}
+      - {id: trainer,    name: Session with trainer, kind: progress}
+      - {id: solo_gym,   name: Solo strength session,     kind: progress}
+      - {id: one_pullup, name: One pullup}
 
   climbing:
     name: Climbing
     cadence: 1x/week          # soft aim; track=count means no drift flag, just the weekly number
     track: count
-    modes: [home, office, weekend]
     variants:
-      - {id: brigid, name: With Brigid, requires: []}
-      - {id: noah,   name: With Noah,   requires: []}
-      - {id: other,  name: Other,       requires: []}
+      - {id: brigid, name: With Brigid}
+      - {id: noah,   name: With Noah}
+      - {id: other,  name: Other}
 
   ovasitol:
     name: Ovasitol
     group: supplements
     cadence: daily
-    modes: [home, office, weekend, travel]
     anchor: after shower, with eye cream
     variants:
-      - {id: taken, name: Taken, requires: []}
+      - {id: taken, name: Taken}
 
   saline:
     name: Saline rinse
     cadence: every_2_days
-    modes: [home, office, weekend]
     variants:
-      - {id: rinse, name: Rinse, requires: []}
+      - {id: rinse, name: Rinse}
 
   veggies:
     name: Veggies
     cadence: daily
-    modes: [home, office, weekend]
     variants:
-      - {id: had, name: Had veggies today (pickled counts), requires: []}
+      - {id: had, name: Had veggies today (pickled counts)}
 
 # ---------------------------------------------------------------- measures
 #
@@ -122,13 +105,11 @@ measures:
     kind: count
     unit: instances
     direction: down
-    modes: [home, office, weekend, travel]
   phone_video:
     name: Phone video time
     kind: scale
     levels: [none, some, a lot]
     direction: down
-    modes: [home, office, weekend, travel]
 
 # ---------------------------------------------------------------- arcs
 #

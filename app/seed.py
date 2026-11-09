@@ -35,7 +35,6 @@ def sync(cfg: dict, today: date | None = None) -> dict:
             habit.name = h.get("name", hid)
             habit.cadence = h.get("cadence", "daily")
             habit.track = h.get("track", "adherence")
-            habit.modes = h.get("modes") or []
             habit.rotation = h.get("rotation")
             habit.default_variant = h.get("default")
             habit.target = h.get("target") or None
@@ -49,7 +48,6 @@ def sync(cfg: dict, today: date | None = None) -> dict:
                 seen_v.add(vid)
                 var = s.get(Variant, vid) or Variant(id=vid, habit_id=hid, key=v["id"])
                 var.name = v.get("name", v["id"])
-                var.requires = v.get("requires") or []
                 var.kind = v.get("kind", "maintenance")
                 var.focus = v.get("focus")
                 var.active = True
@@ -74,7 +72,6 @@ def sync(cfg: dict, today: date | None = None) -> dict:
             meas.levels = m.get("levels") or []
             meas.unit = m.get("unit")
             meas.direction = m.get("direction", "down")
-            meas.modes = m.get("modes") or []
             meas.active = True
             s.add(meas)
             counts["measures"] += 1

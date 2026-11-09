@@ -36,7 +36,7 @@ def expected_per_day(cadence: str) -> float:
 def ensure_day(s: Session, d: date) -> Day:
     day = s.get(Day, d)
     if not day:
-        day = Day(date=d, available=[])
+        day = Day(date=d)
         s.add(day)
         s.flush()
     return day
@@ -49,9 +49,8 @@ def days_in_window(s: Session, start: date, end: date) -> dict[date, Day]:
 # ---------- variants ----------
 
 
-def eligible_variants(habit: Habit, available: list[str]) -> list[Variant]:
-    avail = set(available)
-    return [v for v in habit.variants if v.active and set(v.requires) <= avail]
+def active_variants(habit: Habit) -> list[Variant]:
+    return [v for v in habit.variants if v.active]
 
 
 def last_focus_dates(s: Session, habit_id: str, before: date) -> dict[str, date]:
@@ -69,10 +68,11 @@ def last_focus_dates(s: Session, habit_id: str, before: date) -> dict[str, date]
     return out
 
 
-def suggest_variant(s: Session, habit: Habit, available: list[str], today: date) -> dict:
-    elig = eligible_variants(habit, available)
+def suggest_variant(s: Session, habit: Habit, today: date) -> dict:
+    """Which variant to lead with, if any. Only meaningful for habits with a rotation or a default."""
+    elig = active_variants(habit)
     if not elig:
-        return {"variant": None, "reason": "nothing eligible with what's available"}
+        return {"variant": None, "reason": "no variants"}
     if len(elig) == 1:
         return {"variant": elig[0], "reason": "only option"}
     pref = habit.default_variant
@@ -124,13 +124,8 @@ def arc_snapshot(s: Session, arc: Arc, today: date, recent_days: int = 14) -> di
 
 
 def habit_report(s: Session, habit: Habit, start: date, end: date, days: dict[date, Day], week_start: date) -> dict:
-    def is_eligible(d: Day) -> bool:
-        if not d.mode or (habit.modes and d.mode not in habit.modes):
-            return False
-        # skip_day exempts everything; a travel day only exempts habits that don't list travel
-        return not d.exempt or (d.exempt_reason == "travel" and "travel" in (habit.modes or []))
-
-    eligible = [d for d in days.values() if is_eligible(d)]
+    # A day counts iff it had a debrief. Thin days (flashcards only on a trip) count fully — that's the truth.
+    eligible = list(days.values())
     n_elig = len(eligible)
     n_elig_week = sum(1 for d in eligible if d.date >= week_start)
     entries = s.scalars(select(Entry).where(
@@ -242,8 +237,7 @@ def build_review(s: Session, week_start: date, today: date, window_weeks: int = 
         "week_start": week_start.isoformat(),
         "window": {"start": start.isoformat(), "end": end.isoformat(), "weeks": window_weeks},
         "logged_days": len(days),
-        "exempt_days": sum(1 for d in days.values() if d.exempt),
-        "unlogged_days": unlogged,
+        "null_days": unlogged,
         "habits": habit_reports,
         "measures": measure_reports,
         "arcs": arc_reports,

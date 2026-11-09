@@ -20,56 +20,62 @@ from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Route
 
 from .db import init_db, session
-from .logic import arc_snapshot, build_review, eligible_variants, ensure_day, suggest_variant
+from .logic import active_variants, arc_snapshot, build_review, ensure_day, suggest_variant
 from .models import ActionItem, Arc, ArcNote, Debrief, ContentLog, Entry, Habit, Measure, Review, Todo
 from .seed import load_config
 
 INSTRUCTIONS = """
-You are Taylor's accountability partner over five kinds of things: habits (yes/no against a cadence),
-measures (a daily number to watch), arcs (a static objective with rotating action items), todos
-(one-off housekeeping), and content (what she read/listened to that stuck). Two modes of conversation:
+You are talking to Taylor. Speak to her directly ("you"), never about her ("she"). Keep it short and
+spoken-friendly: this is usually voice at the end of the day.
 
-DAILY DEBRIEF — short, spoken-friendly, under 5 minutes. Call start_debrief first, every time.
-1. Mode: home / office / weekend / travel. Anything unusual on hand or missing (piano, gym)?
-   Travel days are exempt for most habits; the response says which still apply.
-2. Habits, in the order returned. Skip anything marked already_logged unless she wants to change it
-   (a day can have several debriefs; re-logging a habit replaces the earlier answer). Lead with the
-   suggested variant ("Drills — scales today? it's been
-   8 days"). Any eligible variant counts. Skipped is fine; never scold. Count habits (climbing): just
-   ask how many times.
-3. Measures (skip already_logged ones too): ask for the number or the level ("picking — how many times today?", "phone video —
-   none, some, or a lot?").
-4. Arcs, one line each, active arcs only: "Anything move on AD today?" If yes: which open item, or a
-   new one? Finished anything? Keep it to logging; strategy is a separate conversation (below).
-5. Todos: "Anything to add to the list, or anything you knocked out?"
-6. Content: "Anything you read or listened to today that stuck with you?" One question, no follow-up.
-7. Call log_entries ONCE for habits+measures, plus update_action_items / add_todos / log_content as
-   needed, then confirm in one sentence. If she says "skip today" / "don't count today": skip_day, stop.
+You keep five kinds of things for her: habits (yes/no against a cadence), measures (a daily number
+to watch), arcs (a standing objective with rotating action items), todos (one-off housekeeping), and
+content (what she read/listened to that stuck). Config — which habits, cadences, measures, arcs — is
+read-only here; it lives in config.yaml. If she asks to change it, say so and add a todo. Everything
+that *happens* is yours to write.
 
-STRATEGY SESSION — when she says "let's talk AD" / "help me think about the wedding". Call
-get_arc first. This is rubber-ducking, not tracking: read back the objective and open items, ask
-what's actually blocking, help her sequence or cut. If the conversation starts circling (same two
-options going back and forth), say so and offer: "want to take some time to write this down and
-come back?" Two endings, both fine:
+DAILY DEBRIEF — "let's do my debrief". Call start_debrief first (silently), then:
+
+1. Open broad, one question, and let her talk:
+   "Hey Taylor — talk me through today. What was on your mind, what did you get to, what did you
+   want to get to and didn't?"
+   Don't interrupt with the checklist. While she talks, map what you hear:
+     - progress on an arc → which open action item (from start_debrief) or a new one
+     - "wanted to but didn't" / "need to" → a todo, or an action item if it belongs to an arc
+     - habits she mentions in passing (climbed, did flashcards) → entries
+     - something she read or heard → content
+2. If an active arc didn't come up, one combined line: "anything on AD or the wedding?" "No" is a
+   complete answer; don't probe. Quiet arcs are the weekly review's job.
+3. If content didn't come up: "anything you read or listened to that stuck with you?" One question.
+4. Rapid-fire sweep of what's still missing — batched, not one at a time:
+   "Quick ones: flashcards, drills, app song, ovasitol, saline, veggies?"  (only the ones not covered)
+   then "picking — how many? and phone video — none, some, or a lot?"
+   Count habits (climbing): just how many times. Skipped is fine; never scold. If drills come up and
+   start_debrief suggested a focus, mention it as a nudge ("it's been a while since rhythm"), not a
+   question. Skip anything already_logged unless she wants to change it — a day can have several
+   debriefs, and re-logging replaces the earlier answer.
+5. Write everything: log_entries ONCE for habits + measures, plus update_action_items / add_todos /
+   log_content as needed. Then one-line readback and you're done.
+
+Never ask where she was. Days without a debrief are null days; a thin day (flashcards only, on a
+trip) is just a thin day.
+
+STRATEGY SESSION — "let's talk AD" / "help me think about the wedding". Call get_arc first. This
+is rubber-ducking, not tracking: read back the objective and open items, ask what's actually
+blocking, help her sequence or cut. If the conversation starts circling (same two options going
+back and forth), say so and offer: "want to take some time to write this down and come back?"
   - She writes it out (paper or wherever): end now; save a one-line add_arc_note(kind="strategy")
     like "deciding between X and Y — Taylor writing it out", so the next session knows where she
-    left off. If she later pastes the text or shares a photo in a text chat, save it verbatim as
+    left off. If she later pastes the text or shares a photo, save it verbatim as
     add_arc_note(kind="writeout"). On-paper-only is fine; then only what she decided gets saved.
   - She'd rather hash it out here: keep going, and end with new/changed items via
     update_action_items and a short gist as add_arc_note(kind="strategy").
 Don't invent items. Don't push her to hand over the writing.
 
-WEEKLY REVIEW — call weekly_review. Read the flags, not the whole payload. Lead with the 2-3 things
-that changed: drift, measures that moved, arcs that went quiet. For each active arc ask the `ask`
-question and record the answer with record_reflection. Quote returned numbers; never invent any.
-
-CONFIG IS READ-ONLY HERE. Which habits exist, their cadences, which measures, which arcs and their
-status all live in config.yaml in the repo. If Taylor asks to change those ("make drills 5x a week",
-"put NS back on", "add omega-3"), don't pretend to save it: say it needs a config edit and offer to
-note it (add_todo) so it gets applied in a text chat. Action items, todos, notes and content ARE
-yours to write.
-
-Keep every question short. One question at a time. Mirror her words.
+WEEKLY REVIEW — "weekly review". Call weekly_review. Read the flags, not the whole payload. Lead
+with the 2-3 things that changed: off_this_week, drift, measures that moved, arcs that went quiet.
+For each active arc ask the `ask` question and record the answer with record_reflection. Quote
+returned numbers; never invent any.
 """
 
 TOKEN = os.environ.get("ACCESS_TOKEN") or ("" if os.environ.get("VERCEL") else "dev-token")
@@ -98,42 +104,26 @@ def _parse(d: Optional[str]) -> date:
 
 
 @mcp.tool()
-def start_debrief(day: Optional[str] = None, mode: Optional[str] = None, available: Optional[list[str]] = None) -> dict:
-    """Begin the daily debrief (default: today, Taylor's local date). Pass mode once known; `available` =
-    resources on hand (piano, gym, trainer), else the mode's defaults apply. Returns, in asking
-    order: habits (each with a suggested variant), measures, active arcs with open items, open todos."""
-    cfg = load_config()
+def start_debrief(day: Optional[str] = None) -> dict:
+    """Begin the daily debrief (default: today, Taylor's local date). Returns everything you might need to
+    map her story onto: habits (with a suggested variant where a rotation applies), measures, active arcs
+    with their open action items, and open todos. Call it silently, then open with the broad question."""
     d = _parse(day)
     with session() as s:
-        dayrow = ensure_day(s, d)
-        if mode:
-            dayrow.mode = mode
-            if mode == "travel":
-                dayrow.exempt, dayrow.exempt_reason = True, "travel"
-        if available is not None:
-            dayrow.available = available
-        elif dayrow.mode and not dayrow.available:
-            dayrow.available = cfg.get("default_available", {}).get(dayrow.mode, [])
-        ci = Debrief(day=d, started_at=datetime.utcnow())
-        s.add(ci)
+        ensure_day(s, d)
+        db = Debrief(day=d, started_at=datetime.utcnow())
+        s.add(db)
         s.flush()
-        if not dayrow.mode:
-            return {"debrief_id": ci.id, "day": d.isoformat(), "modes": cfg.get("modes"),
-                    "next": "Ask which mode today was, then call start_debrief again with mode."}
-
         logged = {(e.target_type, e.target_id) for e in s.scalars(select(Entry).where(Entry.day == d))}
 
         habits_out = []
         for h in s.scalars(select(Habit).where(Habit.active == True)).all():  # noqa: E712
-            if h.modes and dayrow.mode not in h.modes:
-                continue
-            sug = suggest_variant(s, h, dayrow.available, d)
-            elig = eligible_variants(h, dayrow.available)
+            sug = suggest_variant(s, h, d)
             habits_out.append({
                 "habit": h.id, "name": h.name, "group": h.group, "cadence": h.cadence, "track": h.track,
                 "target": h.target, "anchor": h.anchor, "already_logged": ("habit", h.id) in logged,
                 "suggest": {"variant": sug["variant"].id, "name": sug["variant"].name, "why": sug["reason"]} if sug["variant"] else None,
-                "eligible": [{"variant": v.id, "name": v.name} for v in elig],
+                "variants": [{"variant": v.id, "name": v.name} for v in active_variants(h)],
             })
         habits_out.sort(key=lambda h: (h["group"] or "zz", h["habit"]))
 
@@ -141,24 +131,21 @@ def start_debrief(day: Optional[str] = None, mode: Optional[str] = None, availab
             {"measure": m.id, "name": m.name, "kind": m.kind, "levels": m.levels, "unit": m.unit,
              "already_logged": ("measure", m.id) in logged}
             for m in s.scalars(select(Measure).where(Measure.active == True)).all()  # noqa: E712
-            if not m.modes or dayrow.mode in m.modes
         ]
 
         arcs_out = []
-        if not dayrow.exempt:
-            for a in s.scalars(select(Arc).where(Arc.status == "active")).all():
-                snap = arc_snapshot(s, a, d)
-                arcs_out.append({"arc": a.id, "name": a.name, "priority": a.priority,
-                                 "open_items": snap["open_items"], "days_quiet": snap["days_quiet"]})
-            arcs_out.sort(key=lambda a: {"top": 0, "high": 1}.get(a["priority"] or "", 2))
+        for a in s.scalars(select(Arc).where(Arc.status == "active")).all():
+            snap = arc_snapshot(s, a, d)
+            arcs_out.append({"arc": a.id, "name": a.name, "priority": a.priority,
+                             "open_items": snap["open_items"], "days_quiet": snap["days_quiet"]})
+        arcs_out.sort(key=lambda a: {"top": 0, "high": 1}.get(a["priority"] or "", 2))
 
         todos = s.scalars(select(Todo).where(Todo.status == "open").order_by(Todo.added_on)).all()
         return {
-            "debrief_id": ci.id, "day": d.isoformat(), "mode": dayrow.mode, "exempt": dayrow.exempt,
-            "available": dayrow.available,
+            "debrief_id": db.id, "day": d.isoformat(),
             "habits": habits_out, "measures": measures_out, "arcs": arcs_out,
             "open_todos": [{"id": t.id, "text": t.text} for t in todos],
-            "ask_content": not dayrow.exempt,
+            "open_with": "Hey Taylor — talk me through today. What was on your mind, what did you get to, what did you want to get to and didn't?",
         }
 
 
@@ -205,16 +192,6 @@ def log_entries(debrief_id: int, entries: list[dict], raw_notes: Optional[str] =
         if raw_notes:
             ci.raw_notes = raw_notes
         return {"ok": not problems, "day": ci.day.isoformat(), "entries": written, "problems": problems}
-
-
-@mcp.tool()
-def skip_day(day: Optional[str] = None, reason: str = "not counting today") -> dict:
-    """Mark a day exempt: it drops out of every rate. For travel, sickness, or 'don't count today'."""
-    d = _parse(day)
-    with session() as s:
-        dayrow = ensure_day(s, d)
-        dayrow.exempt, dayrow.exempt_reason = True, reason
-    return {"ok": True, "day": d.isoformat(), "exempt": True}
 
 
 # ---- arcs
@@ -342,8 +319,8 @@ def log_content(items: list[dict], day: Optional[str] = None) -> dict:
 @mcp.tool()
 def weekly_review(week_start: Optional[str] = None, window_weeks: int = 4) -> dict:
     """Build the review for the week starting Monday `week_start` (default: current week). Habit rates are over
-    eligible days in a rolling window (exempt days excluded); measures compare this week to the prior 3; arcs
-    flag quiet weeks and suggest backburner after 3. Read `off_this_week`, `drift`, `measures_worse/better`, `arcs_quiet`,
+    days that had a debrief, in a rolling window; measures compare this week to the prior 3; arcs
+    flag quiet weeks and suggest backburner after 3. Days with no debrief don't count. Read `off_this_week`, `drift`, `measures_worse/better`, `arcs_quiet`,
     `arcs_suggest_backburner`, then each arc's `ask`."""
     from datetime import timedelta
     ws = _parse(week_start)
@@ -405,9 +382,9 @@ def show_config() -> dict:
     """Current habits, measures and arcs as configured (read-only here; edit config.yaml to change)."""
     with session() as s:
         return {
-            "habits": [{"id": h.id, "name": h.name, "group": h.group, "cadence": h.cadence, "track": h.track, "modes": h.modes,
+            "habits": [{"id": h.id, "name": h.name, "group": h.group, "cadence": h.cadence, "track": h.track,
                         "target": h.target,
-                        "variants": [{"id": v.id, "requires": v.requires, "kind": v.kind, "focus": v.focus} for v in h.variants if v.active]}
+                        "variants": [{"id": v.id, "name": v.name, "kind": v.kind, "focus": v.focus} for v in h.variants if v.active]}
                        for h in s.scalars(select(Habit).where(Habit.active == True)).all()],  # noqa: E712
             "measures": [{"id": m.id, "name": m.name, "kind": m.kind, "levels": m.levels, "unit": m.unit, "direction": m.direction}
                          for m in s.scalars(select(Measure).where(Measure.active == True)).all()],  # noqa: E712

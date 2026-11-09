@@ -46,8 +46,10 @@ def run_day(n, logs, travel=False):
 
 
 os.environ["FAKE_TODAY"] = START.isoformat()
-server.set_outcome("project", "AD", "2-minute TF pitch I can deliver cold", "by Nov 1")
-server.set_outcome("habit", "piano", "Current repertoire piece")
+cfg = seed.load_config()
+cfg["projects"]["AD"]["outcome"] = {"title": "2-minute TF pitch I can deliver cold", "horizon": "by Nov 1"}
+cfg["habits"]["piano"]["outcome"] = "Current repertoire piece"
+seed.sync(cfg)
 
 # Week 1: good week. piano via rotation, strength on schedule, AD advances twice, NS tangential only
 good = {"piano": "suggest", "supplements": "supplements:taken", "saline": "saline:rinse", "writing": "writing:three_lines",
@@ -98,4 +100,36 @@ assert "piano" in rev["hanging_on"], "piano week 2 should read as hanging on (al
 assert "NS" in rev["busy_not_moving"], "NS only tangential"
 assert rev["exempt_days"] == 2
 assert "AD" not in rev["dropped"], "AD had entries in window"
+
+# --- config is the only writer of outcomes/status ---
+from sqlalchemy import select
+from app.db import session
+from app.models import Outcome, Project
+assert not hasattr(server, "set_outcome") and not hasattr(server, "set_project_status")
+assert seed.sync(cfg)["outcomes_changed"] == 0, "re-sync with same config must be a no-op"
+cfg["projects"]["AD"]["outcome"] = "Host one TF dinner"
+cfg["projects"]["NS"]["status"] = "parked"
+assert seed.sync(cfg)["outcomes_changed"] == 2  # old retired + new created
+with session() as s_:
+    ad = s_.scalars(select(Outcome).where(Outcome.target_id == "AD")).all()
+    assert sorted(o.status for o in ad) == ["active", "replaced"], [(o.title, o.status) for o in ad]
+    assert s_.get(Project, "NS").status == "parked"
+
+# --- local date: 10pm Central on Nov 9 is 04:00 UTC Nov 10, must still log as Nov 9 ---
+from datetime import datetime, timezone
+from unittest import mock
+os.environ.pop("FAKE_TODAY", None)
+class FakeDT(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 11, 10, 4, 0, tzinfo=timezone.utc).astimezone(tz)
+with mock.patch.object(server, "datetime", FakeDT):
+    assert server._today() == date(2026, 11, 9), server._today()
+class LateNight(FakeDT):
+    @classmethod
+    def now(cls, tz=None):  # 1:30am Central Nov 10 -> still "Nov 9" (day starts at 4am)
+        return datetime(2026, 11, 10, 7, 30, tzinfo=timezone.utc).astimezone(tz)
+with mock.patch.object(server, "datetime", LateNight):
+    assert server._today() == date(2026, 11, 9), server._today()
+
 print("\nOK")

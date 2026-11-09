@@ -10,7 +10,7 @@ A **Day** has a mode (home / office / weekend / travel) and a list of what was a
 A **Habit** has a cadence (`daily`, `every_2_days`, `3x/week`, `1x/2weeks`…), the modes it applies to,
 and **Variants** — each with `requires` (resources), `kind` (maintenance | progress) and an optional
 `focus` for rotation. A **Project** has a `spirit` sentence and a status. Projects *and* habits can
-have one active **Outcome** (binary: active → done). An **Entry** records one habit variant or one
+have one active **Outcome**, set in `config.yaml`. An **Entry** records one habit variant or one
 project touch per day; project entries carry a `relation` (advances | tangential | maintenance | exploring).
 A **Review** rolls this up over a 4-week window of eligible days.
 
@@ -79,8 +79,15 @@ Conventions:
 
 ## Tools
 
-`start_checkin`, `log_entries`, `skip_day`, `set_outcome`, `complete_outcome`, `set_project_status`,
-`weekly_review`, `record_reflection`, `recent_history`, `show_config`. Docstrings in `app/server.py`.
+`start_checkin`, `log_entries`, `skip_day`, `weekly_review`, `record_reflection`, `recent_history`,
+`show_config`. Docstrings in `app/server.py`.
+
+Conversations only write *data* (days, entries, check-in notes, reflections). Everything that is
+*config* — habits, cadences, variants, projects and their status, each target's current outcome —
+lives in `config.yaml` and changes only by editing that file and pushing.
+
+Dates are Taylor's local date (`TZ_NAME`, default `America/Chicago`), and a day runs until 4am
+(`DAY_START_HOUR`), so a late check-in lands on the day it's about.
 
 ## Not built (on purpose)
 

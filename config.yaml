@@ -1,6 +1,9 @@
-# Accountability system config — habits, projects, modes.
-# Edit freely; run `python -m app.seed` to sync changes into the DB.
-# Removing a habit/variant here deactivates it (history is kept).
+# Accountability system config — the ONLY place habits, projects and outcomes are defined.
+# Conversations never change this file; edit it here and push (Vercel redeploys and syncs on boot).
+# Removing a habit/variant deactivates it; changing an `outcome` retires the old one. History is kept.
+#
+# outcome: the one concrete next thing for a habit or project. Either a string, or
+#   {title: "...", horizon: "by Dec 1"}. Leave it out for none.
 
 modes: [home, office, weekend, travel]
 
@@ -22,6 +25,7 @@ habits:
     cadence: daily
     modes: [home, office, weekend]      # travel is exempt
     rotation: least_recent_focus        # how the check-in suggests a progress variant
+    # outcome: "<the piece you're learning right now>"
     default: progress            # same goal every day; rotation picks the focus
     variants:
       - {id: note_game,   name: Note reading game (phone), requires: [],                 kind: maintenance}
@@ -116,6 +120,7 @@ projects:
     priority: top
     spirit: Strong engineers choose TerraFirma and Austin — through relationships, hosting, and a pitch I can deliver cold.
     status: active
+    # outcome: {title: "2-minute TF pitch I can deliver cold", horizon: "by Dec 1"}
   NS:
     name: Noah System (bug tracker + Devin)
     priority: medium

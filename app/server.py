@@ -47,7 +47,10 @@ WEEKLY REVIEW (call weekly_review): read the flags, not the whole payload. Lead 
 that changed. For each active project ask the `ask` question and record the answer with
 record_reflection. Never invent numbers; quote the ones returned.
 
-Outcomes are binary: set with set_outcome, finish with complete_outcome. One active per target.
+CONFIG IS READ-ONLY HERE. Habits, cadences, variants, projects, their status and their current
+outcome all live in config.yaml in the repo. If Taylor wants to change any of them ("make piano 5x a
+week", "park NS", "my new AD goal is..."), don't pretend to save it: say it needs a config edit and
+offer to note it in the check-in notes so it can be applied later in a text chat.
 """
 
 TOKEN = os.environ.get("ACCESS_TOKEN") or ("" if os.environ.get("VERCEL") else "dev-token")
@@ -56,8 +59,17 @@ if not TOKEN:
 mcp = MCPServer("accountability", instructions=INSTRUCTIONS)
 
 
+LOCAL_TZ = os.environ.get("TZ_NAME", "America/Chicago")
+DAY_START_HOUR = int(os.environ.get("DAY_START_HOUR", "4"))  # a 1am check-in still counts as "yesterday"
+
+
 def _today() -> date:
-    return date.fromisoformat(os.environ["FAKE_TODAY"]) if os.environ.get("FAKE_TODAY") else date.today()
+    """Taylor's local date, not the server's (Vercel runs in UTC)."""
+    if os.environ.get("FAKE_TODAY"):
+        return date.fromisoformat(os.environ["FAKE_TODAY"])
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    return (datetime.now(ZoneInfo(LOCAL_TZ)) - timedelta(hours=DAY_START_HOUR)).date()
 
 
 def _parse(d: Optional[str]) -> date:
@@ -168,44 +180,6 @@ def skip_day(day: Optional[str] = None, reason: str = "not counting today") -> d
         dayrow = ensure_day(s, d)
         dayrow.exempt, dayrow.exempt_reason = True, reason
     return {"ok": True, "day": d.isoformat(), "exempt": True}
-
-
-@mcp.tool()
-def set_outcome(target_type: str, target_id: str, title: str, horizon: Optional[str] = None, notes: Optional[str] = None) -> dict:
-    """Set the one active outcome for a project or habit (e.g. project AD: '2-minute pitch I can deliver cold', 'by Nov 1';
-    habit piano: 'Clair de Lune'). Any previous active outcome is parked, not deleted."""
-    with session() as s:
-        prev = active_outcome(s, target_type, target_id)
-        if prev:
-            prev.status = "parked"
-        oc = Outcome(target_type=target_type, target_id=target_id, title=title, horizon=horizon, notes=notes, set_on=_today())
-        s.add(oc)
-        s.flush()
-        return {"ok": True, "outcome_id": oc.id, "parked_previous": prev.title if prev else None}
-
-
-@mcp.tool()
-def complete_outcome(outcome_id: int, note: Optional[str] = None) -> dict:
-    """Mark an outcome done. Binary — they say it's mastered/finished, it is."""
-    with session() as s:
-        oc = s.get(Outcome, outcome_id)
-        if not oc:
-            return {"error": "no such outcome"}
-        oc.status, oc.done_on = "done", _today()
-        if note:
-            oc.notes = (oc.notes or "") + f"\n[done] {note}"
-        return {"ok": True, "title": oc.title, "done_on": oc.done_on.isoformat()}
-
-
-@mcp.tool()
-def set_project_status(project_id: str, status: str, note: Optional[str] = None) -> dict:
-    """active | parked | killed | done. Parking is the honest alternative to silently dropping."""
-    with session() as s:
-        p = s.get(Project, project_id)
-        if not p:
-            return {"error": "no such project"}
-        p.status = status
-        return {"ok": True, "project": p.id, "status": status}
 
 
 @mcp.tool()

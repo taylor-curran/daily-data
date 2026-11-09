@@ -1,4 +1,8 @@
-"""Sync config.yaml into the DB. Idempotent: upserts, deactivates what's gone, never deletes history."""
+"""Sync config.yaml into the DB. Idempotent: upserts, deactivates what's gone, never deletes history.
+
+config.yaml is the single source of truth for habits, variants, projects (incl. status) and each
+target's current outcome. Nothing in a conversation writes config.
+"""
 
 import os
 import sys
@@ -7,7 +11,9 @@ import yaml
 from sqlalchemy import select
 
 from .db import init_db, session
-from .models import Habit, Project, Variant
+from datetime import date
+
+from .models import Habit, Outcome, Project, Variant
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", os.path.join(os.path.dirname(__file__), "..", "config.yaml"))
 
@@ -18,7 +24,7 @@ def load_config() -> dict:
 
 
 def sync(cfg: dict) -> dict:
-    counts = {"habits": 0, "variants": 0, "projects": 0, "deactivated": 0}
+    counts = {"habits": 0, "variants": 0, "projects": 0, "deactivated": 0, "outcomes_changed": 0}
     with session() as s:
         seen_habits, seen_variants = set(), set()
         for hid, h in (cfg.get("habits") or {}).items():
@@ -64,7 +70,32 @@ def sync(cfg: dict) -> dict:
             proj.status = p.get("status", "active")
             s.add(proj)
             counts["projects"] += 1
+        for tt, items in (("habit", cfg.get("habits") or {}), ("project", cfg.get("projects") or {})):
+            for tid, item in items.items():
+                counts["outcomes_changed"] += _sync_outcome(s, tt, tid, item.get("outcome"))
     return counts
+
+
+def _sync_outcome(s, target_type: str, target_id: str, spec) -> int:
+    """Make the DB's active outcome match config. Changing the title retires the old one (kept as history)."""
+    if isinstance(spec, str):
+        spec = {"title": spec}
+    title = (spec or {}).get("title")
+    active = s.scalars(
+        select(Outcome).where(Outcome.target_type == target_type, Outcome.target_id == target_id, Outcome.status == "active")
+    ).first()
+    if active and active.title == title:
+        active.horizon = (spec or {}).get("horizon")
+        return 0
+    changed = 0
+    if active:
+        active.status, active.done_on = "replaced", date.today()
+        changed += 1
+    if title:
+        s.add(Outcome(target_type=target_type, target_id=target_id, title=title,
+                      horizon=(spec or {}).get("horizon"), set_on=date.today()))
+        changed += 1
+    return changed
 
 
 if __name__ == "__main__":

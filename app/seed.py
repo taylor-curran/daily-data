@@ -91,6 +91,7 @@ def sync(cfg: dict, today: date | None = None) -> dict:
             arc.status = a.get("status", "active")
             arc.priority = a.get("priority")
             s.add(arc)
+            s.flush()  # Postgres enforces the FK; the arc row must exist before its items
             counts["arcs"] += 1
             if not arc.seeded:
                 for text in a.get("seed_items") or []:

@@ -428,6 +428,9 @@ def build_app() -> Starlette:
     async def icon(_):
         return FileResponse(os.path.join(static, "icon.svg"), media_type="image/svg+xml")
 
+    async def index(_):
+        return FileResponse(os.path.join(static, "index.html"), media_type="text/html")
+
     async def nope(_):
         return JSONResponse({"error": "not found"}, status_code=404)
 
@@ -480,6 +483,7 @@ def build_app() -> Starlette:
 
     return Starlette(
         routes=[
+            Route("/", index),
             Route("/health", health),
             Route("/favicon.ico", favicon),
             Route("/favicon.png", favicon),

@@ -1,20 +1,22 @@
-"""Simulate ~2 weeks of check-ins through the tool functions and check the review flags.
+"""Simulate ~2 weeks through the tool functions and check the review.
 Run:  DATABASE_URL=sqlite:///./test.db python -m tests.test_e2e
 """
 
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from unittest import mock
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 if os.path.exists("test.db"):
     os.remove("test.db")
 
+from sqlalchemy import select  # noqa: E402
+
 from app import seed, server  # noqa: E402
+from app.db import session  # noqa: E402
+from app.models import ActionItem, Arc, Habit  # noqa: E402
 
-seed.init_db()
-seed.sync(seed.load_config())
-
-START = date(2026, 10, 5)  # a Monday
+START = date(2026, 11, 2)  # a Monday
 PATTERN = {0: "home", 1: "office", 2: "office", 3: "home", 4: "office", 5: "weekend", 6: "weekend"}
 
 
@@ -22,114 +24,146 @@ def day(n):
     return START + timedelta(days=n)
 
 
-def run_day(n, logs, travel=False):
+def run_day(n, habits=None, measures=None, travel=False):
     os.environ["FAKE_TODAY"] = day(n).isoformat()
     mode = "travel" if travel else PATTERN[day(n).weekday()]
     r = server.start_checkin(mode=mode)
-    if r.get("exempt"):
-        return r
     entries = []
     for h in r["habits"]:
-        spec = logs.get(h["habit"])
+        spec = (habits or {}).get(h["habit"])
         if spec is None:
             continue
         if spec == "skip":
             entries.append({"target_type": "habit", "target_id": h["habit"], "result": "skipped"})
         elif spec == "suggest":
             entries.append({"target_type": "habit", "target_id": h["habit"], "variant_id": h["suggest"]["variant"], "result": "done"})
+        elif isinstance(spec, tuple):  # (variant, count)
+            entries.append({"target_type": "habit", "target_id": h["habit"], "variant_id": spec[0], "result": "done", "value": spec[1]})
         else:
             entries.append({"target_type": "habit", "target_id": h["habit"], "variant_id": spec, "result": "done"})
-    for pid, rel in logs.get("_projects", {}).items():
-        entries.append({"target_type": "project", "target_id": pid, "result": "done", "relation": rel, "note": "sim"})
-    server.log_entries(r["checkin_id"], entries, raw_notes="sim day")
+    for mid, v in (measures or {}).items():
+        e = {"target_type": "measure", "target_id": mid}
+        e["label" if isinstance(v, str) else "value"] = v
+        entries.append(e)
+    res = server.log_entries(r["checkin_id"], entries, raw_notes="sim")
+    assert res["ok"], res
     return r
 
 
-os.environ["FAKE_TODAY"] = START.isoformat()
-cfg = seed.load_config()
-cfg["projects"]["AD"]["outcome"] = {"title": "2-minute TF pitch I can deliver cold", "horizon": "by Nov 1"}
-cfg["habits"]["piano"]["outcome"] = "Current repertoire piece"
-seed.sync(cfg)
+# ---- seed sanity (re-seed dated to the sim clock so arc quiet-days are deterministic)
+with session() as s_:
+    for a in s_.scalars(select(Arc)):
+        a.seeded = False
+    for i in s_.scalars(select(ActionItem)):
+        s_.delete(i)
+seed.sync(seed.load_config(), today=START)
+r0 = server.start_checkin(mode="office", day=START.isoformat())
+assert {a["arc"] for a in r0["arcs"]} == {"AD", "WEDDING"}, r0["arcs"]
+ad = next(a for a in r0["arcs"] if a["arc"] == "AD")
+assert len(ad["open_items"]) == 5, "AD seed items"
+assert "piano_piece" not in {h["habit"] for h in r0["habits"]}, "inactive habit must not be asked"
+assert seed.sync(seed.load_config())["seeded_items"] == 0, "seed items only once"
 
-# Week 1: good week. piano via rotation, strength on schedule, AD advances twice, NS tangential only
-good = {"piano": "suggest", "supplements": "supplements:taken", "saline": "saline:rinse", "writing": "writing:three_lines",
-        "veggies_fruit": "veggies_fruit:veggies", "skincare": "skincare:basics"}
+good_h = {"piano_flashcards": "piano_flashcards:done", "piano_drills": "suggest", "piano_app": "piano_app:new_song",
+          "ovasitol": "ovasitol:taken", "saline": "saline:rinse", "veggies": "veggies:had"}
+
+# Week 1: good. picking high, phone "a lot". AD moves twice.
 for n in range(7):
-    logs = dict(good)
+    h = dict(good_h)
     if day(n).weekday() in (0, 3):
-        logs["strength"] = "strength:trainer"
+        h["strength"] = "strength:trainer"
+    if day(n).weekday() == 1:
+        h["strength"] = "strength:solo_gym"
     if day(n).weekday() == 2:
-        logs["climbing"] = "climbing:brigid"
-    if day(n).weekday() in (0, 4):
-        logs["_projects"] = {"AD": "advances", "NS": "tangential"}
-    run_day(n, logs)
+        h["climbing"] = ("climbing:brigid", 1)
+    run_day(n, h, {"picking": 4, "phone_video": "a lot"})
+os.environ["FAKE_TODAY"] = day(1).isoformat()
+first_item = ad["open_items"][0]["id"]
+res = server.update_action_items("AD", done=[first_item], add=["Draft 2-minute pitch v1"], note="listened to 2 interviews")
+assert res["ok"] and len(res["added"]) == 1, res
+server.add_todos(["Order steel-toed boots for Noah", "Find a good place to order brisket"])
+server.log_content([{"text": "CEO interview on competitive edge", "kind": "listened", "note": "the 'vertical integration' line"}])
 
-# Week 2: travel Tue/Wed, piano only app lessons, writing collapses, no AD at all
+# Week 2: travel Tue/Wed; flashcards+ovasitol continue on travel; drills+app collapse; picking down; wedding untouched
 for n in range(7, 14):
     if day(n).weekday() in (1, 2):
-        run_day(n, {}, travel=True)
+        run_day(n, {"piano_flashcards": "piano_flashcards:done", "ovasitol": "ovasitol:taken"}, {"picking": 1, "phone_video": "some"}, travel=True)
         continue
-    logs = {"piano": "piano:app_lesson", "supplements": "supplements:taken", "saline": "saline:rinse",
-            "writing": "skip", "veggies_fruit": "veggies_fruit:veggies", "skincare": "skincare:basics"}
+    h = {"piano_flashcards": "piano_flashcards:done", "piano_drills": "skip", "piano_app": "skip",
+         "ovasitol": "ovasitol:taken", "saline": "saline:rinse", "veggies": "veggies:had"}
     if day(n).weekday() == 0:
-        logs["strength"] = "strength:trainer"
-    if day(n).weekday() == 4:
-        logs["_projects"] = {"NS": "tangential"}
-    run_day(n, logs)
+        h["strength"] = "strength:trainer"
+    run_day(n, h, {"picking": 1, "phone_video": "none"})
+os.environ["FAKE_TODAY"] = day(12).isoformat()
+server.update_todos(done=[1])
 
-# Inspect rotation on the first home day of week 1 vs. what came after
-os.environ["FAKE_TODAY"] = day(14).isoformat()
-r = server.start_checkin(mode="home")
-piano = next(h for h in r["habits"] if h["habit"] == "piano")
-print("piano suggestion on day 15:", piano["suggest"])
-
-rev = server.weekly_review(week_start=day(7).isoformat(), window_weeks=2)
-print("\nlogged", rev["logged_days"], "exempt", rev["exempt_days"], "unlogged", rev["unlogged_days"])
-print("drift:", rev["drift"])
-print("hanging_on:", rev["hanging_on"])
-print("dropped:", rev["dropped"])
-print("busy_not_moving:", rev["busy_not_moving"])
-for h in rev["habits"]:
-    print(f"  {h['habit']:<14} elig={h['eligible_days']:<2} exp={h['expected']:<5} done={h['done_days']:<2} rate={h['rate']}  kinds={h['kinds']} focus={h['focus_coverage']} {h['flags']}")
-for p in rev["projects"]:
-    print(f"  {p['project']:<4} entries={p['entries']} rel={p['relations']} outcome={p['outcome'] and p['outcome']['title']} {p['flags']}")
-
-# assertions
-assert "writing" in rev["drift"], "writing should drift"
-assert "piano" in rev["hanging_on"], "piano week 2 should read as hanging on (all maintenance)"
-assert "NS" in rev["busy_not_moving"], "NS only tangential"
-assert rev["exempt_days"] == 2
-assert "AD" not in rev["dropped"], "AD had entries in window"
-
-# --- config is the only writer of outcomes/status ---
-from sqlalchemy import select
-from app.db import session
-from app.models import Outcome, Project
-assert not hasattr(server, "set_outcome") and not hasattr(server, "set_project_status")
-assert seed.sync(cfg)["outcomes_changed"] == 0, "re-sync with same config must be a no-op"
-cfg["projects"]["AD"]["outcome"] = "Host one TF dinner"
-cfg["projects"]["NS"]["status"] = "parked"
-assert seed.sync(cfg)["outcomes_changed"] == 2  # old retired + new created
+# ---- rotation: drills should rotate focus across week 1
 with session() as s_:
-    ad = s_.scalars(select(Outcome).where(Outcome.target_id == "AD")).all()
-    assert sorted(o.status for o in ad) == ["active", "replaced"], [(o.title, o.status) for o in ad]
-    assert s_.get(Project, "NS").status == "parked"
+    drills = s_.get(Habit, "piano_drills")
+    from app.logic import last_focus_dates
+    assert set(last_focus_dates(s_, "piano_drills", day(7))) == {"fingerpower", "scales", "rhythm"}, "rotation covered all foci"
 
-# --- local date: 10pm Central on Nov 9 is 04:00 UTC Nov 10, must still log as Nov 9 ---
-from datetime import datetime, timezone
-from unittest import mock
+# ---- review for week 2
+os.environ["FAKE_TODAY"] = day(13).isoformat()
+rev = server.weekly_review(week_start=day(7).isoformat(), window_weeks=2)
+print("off_this_week:", rev["off_this_week"], "drift:", rev["drift"])
+print("measures better/worse:", rev["measures_better"], rev["measures_worse"])
+print("arcs quiet / suggest backburner:", rev["arcs_quiet"], rev["arcs_suggest_backburner"])
+for h in rev["habits"]:
+    print(f"  {h['habit']:<17} elig={h['eligible_days']:<2} exp={h['expected']:<5} done={h['done_days']:<2} rate={h['rate']} wk={h['this_week']} {h['flags']}")
+for m in rev["measures"]:
+    print(f"  {m['measure']:<12} this={m['this_week']['avg']} ({m['this_week']['label']}) prior={m['prior_weeks']['avg']} -> {m['trend']}")
+for a in rev["arcs"]:
+    print(f"  {a['arc']:<8} {a['status']:<10} open={len(a['open_items'])} quiet={a['days_quiet']} {a['flags']}")
+print("  todos open:", [t["text"] for t in rev["todos"]["open"]])
+
+assert "piano_drills" in rev["off_this_week"] and "piano_app" in rev["off_this_week"], rev["off_this_week"]
+assert "piano_drills" not in rev["drift"], "one bad week is not yet drift"
+fc = next(h for h in rev["habits"] if h["habit"] == "piano_flashcards")
+assert fc["eligible_days"] == 14 and fc["rate"] == 1.0, "travel days count for travel-proof habits"
+assert "climbing" not in rev["drift"] + rev["off_this_week"], "count habits never drift"
+assert rev["exempt_days"] == 2
+assert set(rev["measures_better"]) == {"picking", "phone_video"}
+wedding = next(a for a in rev["arcs"] if a["arc"] == "WEDDING")
+assert "quiet_week" in wedding["flags"], wedding
+assert not any(a["arc"] == "NS" and a["status"] == "active" for a in rev["arcs"])
+assert [t["text"] for t in rev["todos"]["open"]] == ["Find a good place to order brisket"]
+hist = server.recent_history(days=14)
+assert hist["content"] and hist["arc_notes"] and hist["action_items_changed"]
+
+# ---- removed tools stay removed; config is the only writer of arc status
+for name in ("set_outcome", "complete_outcome", "set_project_status"):
+    assert not hasattr(server, name)
+cfg = seed.load_config()
+cfg["arcs"]["WEDDING"]["status"] = "backburner"
+seed.sync(cfg)
+with session() as s_:
+    assert s_.get(Arc, "WEDDING").status == "backburner"
+
+# ---- schema reset guard refuses when data exists
+from app import db as dbmod
+from sqlalchemy import text
+with dbmod.engine.begin() as conn:
+    conn.execute(text("drop table schema_version"))
+try:
+    dbmod.init_db()
+    raise SystemExit("reset guard should have refused")
+except RuntimeError as e:
+    assert "refusing" in str(e)
+
+# ---- local date: 10pm Central = 04:00 UTC next day -> still today; 1:30am -> still yesterday
 os.environ.pop("FAKE_TODAY", None)
 class FakeDT(datetime):
     @classmethod
     def now(cls, tz=None):
         return datetime(2026, 11, 10, 4, 0, tzinfo=timezone.utc).astimezone(tz)
 with mock.patch.object(server, "datetime", FakeDT):
-    assert server._today() == date(2026, 11, 9), server._today()
+    assert server._today() == date(2026, 11, 9)
 class LateNight(FakeDT):
     @classmethod
-    def now(cls, tz=None):  # 1:30am Central Nov 10 -> still "Nov 9" (day starts at 4am)
+    def now(cls, tz=None):
         return datetime(2026, 11, 10, 7, 30, tzinfo=timezone.utc).astimezone(tz)
 with mock.patch.object(server, "datetime", LateNight):
-    assert server._today() == date(2026, 11, 9), server._today()
+    assert server._today() == date(2026, 11, 9)
 
 print("\nOK")

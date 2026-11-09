@@ -32,7 +32,34 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def init_db() -> None:
+    """Create tables. One-time guarded reset from schema v1 (projects/outcomes) to v2.
+
+    There is no migration tooling yet. v1 never held logged data, so if the DB is at v1 and
+    has no entries, drop it all and recreate. If it DOES have entries, refuse loudly rather
+    than lose anything — that's the point at which to add Alembic.
+    """
+    from sqlalchemy import inspect, text
+
+    from .models import SCHEMA_VERSION, SchemaVersion
+
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    if tables and "schema_version" not in tables:
+        with engine.begin() as conn:
+            n = conn.execute(text("select count(*) from entries")).scalar() if "entries" in tables else 0
+        if n:
+            raise RuntimeError(
+                f"DB is schema v1 with {n} logged entries; refusing to auto-reset. Add a migration."
+            )
+        Base.metadata.drop_all(engine)
+        with engine.begin() as conn:
+            for legacy in ("entries", "outcomes", "projects", "checkins", "reviews", "variants", "habits", "days"):
+                conn.execute(text(f"drop table if exists {legacy} cascade" if engine.dialect.name == "postgresql"
+                                  else f"drop table if exists {legacy}"))
     Base.metadata.create_all(engine)
+    with session() as s:
+        if not s.get(SchemaVersion, SCHEMA_VERSION):
+            s.add(SchemaVersion(version=SCHEMA_VERSION))
 
 
 @contextmanager

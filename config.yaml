@@ -1,139 +1,168 @@
-# Accountability system config — the ONLY place habits, projects and outcomes are defined.
-# Conversations never change this file; edit it here and push (Vercel redeploys and syncs on boot).
-# Removing a habit/variant deactivates it; changing an `outcome` retires the old one. History is kept.
+# daily-data config — the ONLY place habits, measures and arcs are defined.
 #
-# outcome: the one concrete next thing for a habit or project. Either a string, or
-#   {title: "...", horizon: "by Dec 1"}. Leave it out for none.
+# Conversations never change this file. Edit it here and push; Vercel redeploys and syncs on boot.
+# Removing something deactivates it (history is kept). Everything that *happens* — entries,
+# action items, todos, content, notes — is data and is written by conversations.
+#
+# Five kinds of things:
+#   habits    yes/no adherence against a cadence            ("did you?")
+#   measures  a daily number you want to see trend           ("how many?")
+#   arcs      a static objective + rotating action items     ("what moved? what's next?")
+#   todos     one-off housekeeping                           (data only, nothing to configure)
+#   content   what you read/listened to that stuck           (data only)
 
 modes: [home, office, weekend, travel]
 
-# Things a day can have available; checked against variant `requires`.
-resources: [piano, gym, kitchen, trainer, climbing_gym]
-
-# What's normally available per mode (you can override at check-in).
-# Only real physical constraints live here. Habits aim for the same version every day
-# regardless of mode; mode mostly matters for travel (exempt) and location-bound things.
+# Physical things a day may or may not have. Checked against variant `requires`.
+resources: [piano, gym, trainer]
 default_available:
-  home: [piano, gym, kitchen, trainer]
+  home: [piano, gym, trainer]
   office: [piano, gym]
-  weekend: [piano, gym, kitchen]
+  weekend: [piano, gym]
   travel: []
 
+# ---------------------------------------------------------------- habits
+#
+# cadence:  daily | every_N_days | Nx/week | Nx/2weeks | Nx/month
+# track:    adherence (default; drift flag when below cadence) | count (just count it, no drift flag)
+# modes:    where the habit is expected; omit travel to make travel exempt for it
+# default:  variant key to lead with, or "progress" = most-overdue progress focus (needs rotation)
+# target:   free text shown at check-in, e.g. the piece being learned
+
 habits:
-  piano:
-    name: Piano
+  piano_flashcards:
+    name: Piano flashcards
+    group: piano
     cadence: daily
-    modes: [home, office, weekend]      # travel is exempt
-    rotation: least_recent_focus        # how the check-in suggests a progress variant
-    # outcome: "<the piece you're learning right now>"
-    default: progress            # same goal every day; rotation picks the focus
+    modes: [home, office, weekend, travel]     # phone app — no excuse
     variants:
-      - {id: note_game,   name: Note reading game (phone), requires: [],                 kind: maintenance}
-      - {id: app_lesson,  name: App lesson (scales + short pieces), requires: [piano],   kind: maintenance}
-      - {id: repertoire,  name: Work on the current piece, requires: [piano],            kind: progress, focus: repertoire}
-      - {id: rhythm,      name: Rhythm drill with metronome, requires: [piano],            kind: progress, focus: rhythm}
-      - {id: chords,      name: Chords / harmony day, requires: [piano],                 kind: progress, focus: chords}
-      - {id: post_it,     name: Post-it method on a trouble spot, requires: [piano],     kind: progress, focus: post_it}
+      - {id: done, name: Flashcards session, requires: []}
+
+  piano_drills:
+    name: Piano drills
+    group: piano
+    cadence: 3x/week
+    modes: [home, office, weekend]
+    rotation: least_recent_focus
+    default: progress
+    variants:
+      - {id: fingerpower, name: Fingerpower,       requires: [piano], kind: progress, focus: fingerpower}
+      - {id: scales,      name: Scales,            requires: [piano], kind: progress, focus: scales}
+      - {id: rhythm,      name: Rhythm exercises,  requires: [piano], kind: progress, focus: rhythm}
+
+  piano_app:
+    name: Piano app song
+    group: piano
+    cadence: 3x/week
+    modes: [home, office, weekend]
+    variants:
+      - {id: new_song, name: New micro song in the app, requires: [piano]}
+
+  piano_piece:
+    name: Piano piece
+    group: piano
+    active: false            # flip on when flashcards feel solid; set `target` to the piece
+    target: ""
+    cadence: 2x/week
+    modes: [home, office, weekend]
+    variants:
+      - {id: practice, name: Work on the piece, requires: [piano], kind: progress}
 
   strength:
     name: Strength
-    cadence: 3x/week
+    cadence: 3x/week          # later: per-exercise logging (split squats @ N lbs) as measures
     modes: [home, office, weekend]
-    default: progress            # trainer if available, else solo gym
+    default: progress
     variants:
-      - {id: one_pullup, name: One pullup,            requires: [],        kind: maintenance}
-      - {id: walk,       name: A walk,                requires: [],        kind: maintenance}
       - {id: trainer,    name: Session with trainer,  requires: [trainer], kind: progress}
       - {id: solo_gym,   name: Solo strength session, requires: [gym],     kind: progress}
+      - {id: one_pullup, name: One pullup,            requires: []}
 
   climbing:
     name: Climbing
-    cadence: 1x/week
-    modes: [home, office]
-    variants:
-      - {id: brigid, name: Wednesday with Brigid, requires: [climbing_gym], kind: maintenance}
-      - {id: noah,   name: Tuesday with Noah,     requires: [climbing_gym], kind: maintenance}
-
-  writing:
-    name: Writing
-    cadence: daily
+    cadence: 1x/week          # soft aim; track=count means no drift flag, just the weekly number
+    track: count
     modes: [home, office, weekend]
-    default: three_lines
     variants:
-      - {id: three_lines, name: Three lines,                 requires: [], kind: maintenance}
-      - {id: ponder,      name: Ad-hoc pondering session,    requires: [], kind: progress, focus: ponder}
-      - {id: obsidian,    name: Obsidian learning note,      requires: [], kind: progress, focus: learning}
+      - {id: brigid, name: With Brigid, requires: []}
+      - {id: noah,   name: With Noah,   requires: []}
+      - {id: other,  name: Other,       requires: []}
+
+  ovasitol:
+    name: Ovasitol
+    group: supplements
+    cadence: daily
+    modes: [home, office, weekend, travel]
+    anchor: after shower, with eye cream
+    variants:
+      - {id: taken, name: Taken, requires: []}
 
   saline:
     name: Saline rinse
     cadence: every_2_days
     modes: [home, office, weekend]
     variants:
-      - {id: rinse, name: Rinse, requires: [], kind: maintenance}
+      - {id: rinse, name: Rinse, requires: []}
 
-  supplements:
-    name: Supplements
-    cadence: daily
-    modes: [home, office, weekend, travel]   # the one habit that still counts on travel
-    anchor: after shower, with eye cream
-    variants:
-      - {id: taken, name: Taken, requires: [], kind: maintenance}
-
-  skincare:
-    name: Skincare
-    cadence: daily
-    modes: [home, office, weekend]
-    default: serums
-    variants:
-      - {id: basics, name: Sunscreen + eye cream, requires: [], kind: maintenance}
-      - {id: serums, name: Serums,                requires: [], kind: progress}
-
-  veggies_fruit:
-    name: Veggies + fruit first
+  veggies:
+    name: Veggies
     cadence: daily
     modes: [home, office, weekend]
     variants:
-      - {id: veggies,     name: Veggies today (pickled counts),  requires: [], kind: maintenance}
-      - {id: fruit_first, name: Fruit before ice cream tonight, requires: [], kind: maintenance}
+      - {id: had, name: Had veggies today (pickled counts), requires: []}
 
-  cooking:
-    name: Cooking
-    cadence: 1x/2weeks
-    modes: [home, weekend]
-    default: meal_prep
-    variants:
-      - {id: meal_prep,  name: Meal prep batch,     requires: [kitchen], kind: maintenance}
-      - {id: pickling,   name: Pickling batch,      requires: [kitchen], kind: maintenance}
-      - {id: new_recipe, name: New recipe attempt,  requires: [kitchen], kind: progress, focus: rotation}
+# ---------------------------------------------------------------- measures
+#
+# kind: count (a number) | scale (pick a level; stored as its index)
+# direction: which way is good — the review reports the trend, it doesn't nag
 
-  reading:
-    name: Reading
-    cadence: 2x/week
-    modes: [home, office, weekend]
-    variants:
-      - {id: physical, name: Physical book, requires: [], kind: maintenance}
-      - {id: audio,    name: Audiobook,     requires: [], kind: maintenance}
+measures:
+  picking:
+    name: Skin picking
+    kind: count
+    unit: instances
+    direction: down
+    modes: [home, office, weekend, travel]
+  phone_video:
+    name: Phone video time
+    kind: scale
+    levels: [none, some, a lot]
+    direction: down
+    modes: [home, office, weekend, travel]
 
-projects:
+# ---------------------------------------------------------------- arcs
+#
+# objective: static; what the arc is for. Action items are data — add/finish/drop them in conversation.
+# seed_items: inserted ONCE, the first time the arc is created. Edit items in conversation after that.
+# status: active | backburner | done. The review suggests backburner after 3 quiet weeks; you flip it here.
+
+arcs:
   AD:
-    name: Austin Dynamism (TF recruiting)
+    name: Austin Dynamism
     priority: top
-    spirit: Strong engineers choose TerraFirma and Austin — through relationships, hosting, and a pitch I can deliver cold.
     status: active
-    # outcome: {title: "2-minute TF pitch I can deliver cold", horizon: "by Dec 1"}
+    objective: Strong engineers choose TerraFirma and Austin — through relationships, hosting, and a pitch I can deliver cold.
+    seed_items:
+      - Listen to CEO interviews; save favorite soundbites on competitive edge / why TF (maybe a flashcard deck)
+      - Help Noah build the presentation for Thursday's UT student event
+      - Set up an agent skill that finds relevant Austin tech events
+      - Schedule meetings with students on campus
+      - Pre-research candidates and draft mock technical screening questions; get Noah's feedback (ask him to record screens)
+
+  WEDDING:
+    name: Wedding & family
+    priority: high
+    status: active
+    objective: Plan the wedding.
+    seed_items:
+      - Book a wedding venue
+
   NS:
-    name: Noah System (bug tracker + Devin)
-    priority: medium
-    spirit: Be concretely useful to the TF eng team with tooling I already know.
-    status: active
+    name: Noah System
+    status: backburner
+    objective: Be concretely useful to the TF eng team with tooling I already know (bug tracker + Devin).
+
   ER:
-    name: Ed Robot (learn robotics)
-    priority: low
-    spirit: Curiosity only — does not count as AD work.
-    status: parked
-  GS:
-    name: Gauntlet School
-    status: killed
-  BOOTCAMP:
-    name: Robotics bootcamp / apprenticeship
-    status: parked
+    name: Ed Robot
+    status: backburner
+    objective: Learn robotics for its own sake. Does not count as AD work.

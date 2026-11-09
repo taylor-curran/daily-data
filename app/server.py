@@ -70,7 +70,7 @@ def _parse(d: Optional[str]) -> date:
 @mcp.tool()
 def start_checkin(day: Optional[str] = None, mode: Optional[str] = None, available: Optional[list[str]] = None) -> dict:
     """Begin a check-in for a day (default today). Pass mode once known; available = resources on hand
-    (piano, gym, kitchen, trainer, metronome, climbing_gym). Returns the habits to ask about, each with a
+    (piano, gym, kitchen, trainer, climbing_gym). Returns the habits to ask about, each with a
     suggested variant and the other eligible variants, plus active projects with their current outcome."""
     cfg = load_config()
     d = _parse(day)

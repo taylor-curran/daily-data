@@ -28,7 +28,10 @@ def sync(cfg: dict) -> dict:
             habit.cadence = h.get("cadence", "daily")
             habit.modes = h.get("modes") or []
             habit.rotation = h.get("rotation")
-            habit.default_by_mode = h.get("default_by_mode") or {}
+            dbm = dict(h.get("default_by_mode") or {})
+            if h.get("default"):
+                dbm["*"] = h["default"]  # applies to every mode unless a mode overrides it
+            habit.default_by_mode = dbm
             habit.anchor = h.get("anchor")
             habit.active = True
             s.add(habit)

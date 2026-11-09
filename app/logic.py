@@ -76,7 +76,8 @@ def suggest_variant(s: Session, habit: Habit, mode: str | None, available: list[
     elig = eligible_variants(habit, available)
     if not elig:
         return {"variant": None, "reason": "nothing eligible with what's available"}
-    pref = (habit.default_by_mode or {}).get(mode or "", None)
+    dbm = habit.default_by_mode or {}
+    pref = dbm.get(mode or "") or dbm.get("*")
     progress = [v for v in elig if v.kind == "progress"]
     if pref == "progress" or (pref is None and progress and habit.rotation):
         if progress:

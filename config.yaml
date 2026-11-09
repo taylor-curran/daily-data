@@ -5,11 +5,13 @@
 modes: [home, office, weekend, travel]
 
 # Things a day can have available; checked against variant `requires`.
-resources: [piano, gym, metronome, kitchen, trainer, climbing_gym]
+resources: [piano, gym, kitchen, trainer, climbing_gym]
 
 # What's normally available per mode (you can override at check-in).
+# Only real physical constraints live here. Habits aim for the same version every day
+# regardless of mode; mode mostly matters for travel (exempt) and location-bound things.
 default_available:
-  home: [piano, gym, kitchen, trainer, metronome]
+  home: [piano, gym, kitchen, trainer]
   office: [piano, gym]
   weekend: [piano, gym, kitchen]
   travel: []
@@ -20,12 +22,12 @@ habits:
     cadence: daily
     modes: [home, office, weekend]      # travel is exempt
     rotation: least_recent_focus        # how the check-in suggests a progress variant
-    default_by_mode: {home: progress, office: app_lesson, weekend: progress}
+    default: progress            # same goal every day; rotation picks the focus
     variants:
       - {id: note_game,   name: Note reading game (phone), requires: [],                 kind: maintenance}
       - {id: app_lesson,  name: App lesson (scales + short pieces), requires: [piano],   kind: maintenance}
       - {id: repertoire,  name: Work on the current piece, requires: [piano],            kind: progress, focus: repertoire}
-      - {id: rhythm,      name: Rhythm drill with metronome, requires: [piano, metronome], kind: progress, focus: rhythm}
+      - {id: rhythm,      name: Rhythm drill with metronome, requires: [piano],            kind: progress, focus: rhythm}
       - {id: chords,      name: Chords / harmony day, requires: [piano],                 kind: progress, focus: chords}
       - {id: post_it,     name: Post-it method on a trouble spot, requires: [piano],     kind: progress, focus: post_it}
 
@@ -33,12 +35,12 @@ habits:
     name: Strength
     cadence: 3x/week
     modes: [home, office, weekend]
-    default_by_mode: {home: trainer, office: solo_gym, weekend: solo_gym}
+    default: progress            # trainer if available, else solo gym
     variants:
       - {id: one_pullup, name: One pullup,            requires: [],        kind: maintenance}
       - {id: walk,       name: A walk,                requires: [],        kind: maintenance}
-      - {id: solo_gym,   name: Solo strength session, requires: [gym],     kind: progress}
       - {id: trainer,    name: Session with trainer,  requires: [trainer], kind: progress}
+      - {id: solo_gym,   name: Solo strength session, requires: [gym],     kind: progress}
 
   climbing:
     name: Climbing
@@ -52,7 +54,7 @@ habits:
     name: Writing
     cadence: daily
     modes: [home, office, weekend]
-    default_by_mode: {home: three_lines, office: three_lines, weekend: three_lines}
+    default: three_lines
     variants:
       - {id: three_lines, name: Three lines,                 requires: [], kind: maintenance}
       - {id: ponder,      name: Ad-hoc pondering session,    requires: [], kind: progress, focus: ponder}
@@ -77,7 +79,7 @@ habits:
     name: Skincare
     cadence: daily
     modes: [home, office, weekend]
-    default_by_mode: {home: serums, office: basics, weekend: basics}
+    default: serums
     variants:
       - {id: basics, name: Sunscreen + eye cream, requires: [], kind: maintenance}
       - {id: serums, name: Serums,                requires: [], kind: progress}
@@ -94,7 +96,7 @@ habits:
     name: Cooking
     cadence: 1x/2weeks
     modes: [home, weekend]
-    default_by_mode: {home: meal_prep, weekend: meal_prep}
+    default: meal_prep
     variants:
       - {id: meal_prep,  name: Meal prep batch,     requires: [kitchen], kind: maintenance}
       - {id: pickling,   name: Pickling batch,      requires: [kitchen], kind: maintenance}

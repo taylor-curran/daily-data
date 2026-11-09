@@ -1,6 +1,6 @@
 # daily-data
 
-A personal tracker that Claude voice mode talks to. One short check-in a day, a weekly review, and
+A personal tracker that Claude voice mode talks to. One short debrief a day, a weekly review, and
 separate strategy conversations for the bigger threads. Lives at `https://daily-data-one.vercel.app`.
 
 ## The model
@@ -9,11 +9,11 @@ Five kinds of things. Two sources of truth.
 
 | Kind | What | Defined in | Written by |
 |---|---|---|---|
-| **Habit** | yes/no against a cadence (flashcards daily, drills 3x/week) | `config.yaml` | check-in → `entries` |
-| **Measure** | a daily number you want to see trend (picking count, phone video level) | `config.yaml` | check-in → `entries.value` |
+| **Habit** | yes/no against a cadence (flashcards daily, drills 3x/week) | `config.yaml` | debrief → `entries` |
+| **Measure** | a daily number you want to see trend (picking count, phone video level) | `config.yaml` | debrief → `entries.value` |
 | **Arc** | a static objective with rotating action items (AD, Wedding) | objective + status in `config.yaml` | conversations → `action_items`, `arc_notes` |
 | **Todo** | one-off housekeeping (boots for Noah, order brisket) | — | conversations → `todos` |
-| **Content** | what you read / listened to that stuck | — | check-in → `content_log` |
+| **Content** | what you read / listened to that stuck | — | debrief → `content_log` |
 
 Config is the *shape*: it only changes by editing `config.yaml` and pushing (Vercel redeploys and
 syncs on boot). Everything that *happens* is data and is written by conversations. Conversations
@@ -24,7 +24,7 @@ on travel days; the rest are exempt. `skip_day` exempts everything.
 
 ## Conversations
 
-- **Daily check-in** (`start_checkin` → `log_entries` + friends): mode → habits (suggested variant
+- **Daily debrief** (`start_debrief` → `log_entries` + friends): mode → habits (suggested variant
   first; drills rotate through fingerpower / scales / rhythm by least-recent) → measures → one line
   per active arc → todos → "anything that stuck with you today?". Under five minutes.
 - **Strategy session** ("let's talk AD"): `get_arc`, then rubber-ducking — what's blocking, what to
@@ -80,7 +80,7 @@ connector's tools — there are 14.
 ## Reading your data
 
 Neon console → SQL Editor, or any Postgres client with the connection string from the Storage page:
-`entries`, `days`, `checkins`, `action_items`, `arc_notes`, `todos`, `content_log`, `reviews`.
+`entries`, `days`, `debriefs`, `action_items`, `arc_notes`, `todos`, `content_log`, `reviews`.
 It's yours; `pg_dump` takes all of it.
 
 ## Not built (on purpose)

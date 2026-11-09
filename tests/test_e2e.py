@@ -27,7 +27,7 @@ def day(n):
 def run_day(n, habits=None, measures=None, travel=False):
     os.environ["FAKE_TODAY"] = day(n).isoformat()
     mode = "travel" if travel else PATTERN[day(n).weekday()]
-    r = server.start_checkin(mode=mode)
+    r = server.start_debrief(mode=mode)
     entries = []
     for h in r["habits"]:
         spec = (habits or {}).get(h["habit"])
@@ -45,7 +45,7 @@ def run_day(n, habits=None, measures=None, travel=False):
         e = {"target_type": "measure", "target_id": mid}
         e["label" if isinstance(v, str) else "value"] = v
         entries.append(e)
-    res = server.log_entries(r["checkin_id"], entries, raw_notes="sim")
+    res = server.log_entries(r["debrief_id"], entries, raw_notes="sim")
     assert res["ok"], res
     return r
 
@@ -57,7 +57,7 @@ with session() as s_:
     for i in s_.scalars(select(ActionItem)):
         s_.delete(i)
 seed.sync(seed.load_config(), today=START)
-r0 = server.start_checkin(mode="office", day=START.isoformat())
+r0 = server.start_debrief(mode="office", day=START.isoformat())
 assert {a["arc"] for a in r0["arcs"]} == {"AD", "WEDDING"}, r0["arcs"]
 ad = next(a for a in r0["arcs"] if a["arc"] == "AD")
 assert len(ad["open_items"]) == 5, "AD seed items"

@@ -4,7 +4,7 @@ Five kinds of things, two sources of truth:
 
   CONFIG (config.yaml, synced on boot)      DATA (written by conversations)
   ------------------------------------      --------------------------------
-  Habit, Variant   yes/no adherence          Day, CheckIn, Entry
+  Habit, Variant   yes/no adherence          Day, Debrief, Entry
   Measure          a daily number            Entry (with value)
   Arc              objective + status        ActionItem, ArcNote
                                              Todo
@@ -20,7 +20,7 @@ from typing import Optional
 from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class Base(DeclarativeBase):
@@ -102,8 +102,8 @@ class Day(Base):
     available: Mapped[list] = mapped_column(JSON, default=list)
 
 
-class CheckIn(Base):
-    __tablename__ = "checkins"
+class Debrief(Base):
+    __tablename__ = "debriefs"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     day: Mapped[date] = mapped_column(ForeignKey("days.date"))
     started_at: Mapped[datetime] = mapped_column(DateTime)
@@ -117,7 +117,7 @@ class Entry(Base):
     __tablename__ = "entries"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     day: Mapped[date] = mapped_column(ForeignKey("days.date"))
-    checkin_id: Mapped[Optional[int]] = mapped_column(ForeignKey("checkins.id"))
+    debrief_id: Mapped[Optional[int]] = mapped_column(ForeignKey("debriefs.id"))
     target_type: Mapped[str] = mapped_column(String(8))  # habit | measure
     target_id: Mapped[str] = mapped_column(String(40))
     variant_id: Mapped[Optional[str]] = mapped_column(String(40))  # habits only

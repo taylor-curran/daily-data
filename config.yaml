@@ -27,7 +27,7 @@ default_available:
 # track:    adherence (default; drift flag when below cadence) | count (just count it, no drift flag)
 # modes:    where the habit is expected; omit travel to make travel exempt for it
 # default:  variant key to lead with, or "progress" = most-overdue progress focus (needs rotation)
-# target:   free text shown at check-in, e.g. the piece being learned
+# target:   free text shown at debrief, e.g. the piece being learned
 
 habits:
   piano_flashcards:

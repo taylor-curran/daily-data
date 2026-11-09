@@ -21,7 +21,7 @@ from starlette.routing import Route
 
 from .db import init_db, session
 from .logic import arc_snapshot, build_review, eligible_variants, ensure_day, suggest_variant
-from .models import ActionItem, Arc, ArcNote, CheckIn, ContentLog, Entry, Habit, Measure, Review, Todo
+from .models import ActionItem, Arc, ArcNote, Debrief, ContentLog, Entry, Habit, Measure, Review, Todo
 from .seed import load_config
 
 INSTRUCTIONS = """
@@ -29,7 +29,7 @@ You are Taylor's accountability partner over five kinds of things: habits (yes/n
 measures (a daily number to watch), arcs (a static objective with rotating action items), todos
 (one-off housekeeping), and content (what she read/listened to that stuck). Two modes of conversation:
 
-DAILY CHECK-IN — short, spoken-friendly, under 5 minutes. Call start_checkin first, every time.
+DAILY DEBRIEF — short, spoken-friendly, under 5 minutes. Call start_debrief first, every time.
 1. Mode: home / office / weekend / travel. Anything unusual on hand or missing (piano, gym)?
    Travel days are exempt for most habits; the response says which still apply.
 2. Habits, in the order returned. Lead with the suggested variant ("Drills — scales today? it's been
@@ -46,9 +46,16 @@ DAILY CHECK-IN — short, spoken-friendly, under 5 minutes. Call start_checkin f
 
 STRATEGY SESSION — when she says "let's talk AD" / "help me think about the wedding". Call
 get_arc first. This is rubber-ducking, not tracking: read back the objective and open items, ask
-what's actually blocking, help her sequence or cut, and when she's choosing between options offer
-"want to write it out?" and let her think out loud. End by saving: new/changed items via
-update_action_items, and the gist as add_arc_note(kind="strategy" or "writeout"). Don't invent items.
+what's actually blocking, help her sequence or cut. If the conversation starts circling (same two
+options going back and forth), say so and offer: "want to take some time to write this down and
+come back?" Two endings, both fine:
+  - She writes it out (paper or wherever): end now; save a one-line add_arc_note(kind="strategy")
+    like "deciding between X and Y — Taylor writing it out", so the next session knows where she
+    left off. If she later pastes the text or shares a photo in a text chat, save it verbatim as
+    add_arc_note(kind="writeout"). On-paper-only is fine; then only what she decided gets saved.
+  - She'd rather hash it out here: keep going, and end with new/changed items via
+    update_action_items and a short gist as add_arc_note(kind="strategy").
+Don't invent items. Don't push her to hand over the writing.
 
 WEEKLY REVIEW — call weekly_review. Read the flags, not the whole payload. Lead with the 2-3 things
 that changed: drift, measures that moved, arcs that went quiet. For each active arc ask the `ask`
@@ -69,7 +76,7 @@ if not TOKEN:
 mcp = MCPServer("daily-data", instructions=INSTRUCTIONS)
 
 LOCAL_TZ = os.environ.get("TZ_NAME", "America/Chicago")
-DAY_START_HOUR = int(os.environ.get("DAY_START_HOUR", "4"))  # a 1am check-in still counts as "yesterday"
+DAY_START_HOUR = int(os.environ.get("DAY_START_HOUR", "4"))  # a 1am debrief still counts as "yesterday"
 
 
 def _today() -> date:
@@ -89,8 +96,8 @@ def _parse(d: Optional[str]) -> date:
 
 
 @mcp.tool()
-def start_checkin(day: Optional[str] = None, mode: Optional[str] = None, available: Optional[list[str]] = None) -> dict:
-    """Begin the daily check-in (default: today, Taylor's local date). Pass mode once known; `available` =
+def start_debrief(day: Optional[str] = None, mode: Optional[str] = None, available: Optional[list[str]] = None) -> dict:
+    """Begin the daily debrief (default: today, Taylor's local date). Pass mode once known; `available` =
     resources on hand (piano, gym, trainer), else the mode's defaults apply. Returns, in asking
     order: habits (each with a suggested variant), measures, active arcs with open items, open todos."""
     cfg = load_config()
@@ -105,12 +112,12 @@ def start_checkin(day: Optional[str] = None, mode: Optional[str] = None, availab
             dayrow.available = available
         elif dayrow.mode and not dayrow.available:
             dayrow.available = cfg.get("default_available", {}).get(dayrow.mode, [])
-        ci = CheckIn(day=d, started_at=datetime.utcnow())
+        ci = Debrief(day=d, started_at=datetime.utcnow())
         s.add(ci)
         s.flush()
         if not dayrow.mode:
-            return {"checkin_id": ci.id, "day": d.isoformat(), "modes": cfg.get("modes"),
-                    "next": "Ask which mode today was, then call start_checkin again with mode."}
+            return {"debrief_id": ci.id, "day": d.isoformat(), "modes": cfg.get("modes"),
+                    "next": "Ask which mode today was, then call start_debrief again with mode."}
 
         logged = {(e.target_type, e.target_id) for e in s.scalars(select(Entry).where(Entry.day == d))}
 
@@ -145,7 +152,7 @@ def start_checkin(day: Optional[str] = None, mode: Optional[str] = None, availab
 
         todos = s.scalars(select(Todo).where(Todo.status == "open").order_by(Todo.added_on)).all()
         return {
-            "checkin_id": ci.id, "day": d.isoformat(), "mode": dayrow.mode, "exempt": dayrow.exempt,
+            "debrief_id": ci.id, "day": d.isoformat(), "mode": dayrow.mode, "exempt": dayrow.exempt,
             "available": dayrow.available,
             "habits": habits_out, "measures": measures_out, "arcs": arcs_out,
             "open_todos": [{"id": t.id, "text": t.text} for t in todos],
@@ -154,16 +161,16 @@ def start_checkin(day: Optional[str] = None, mode: Optional[str] = None, availab
 
 
 @mcp.tool()
-def log_entries(checkin_id: int, entries: list[dict], raw_notes: Optional[str] = None) -> dict:
-    """Record habits and measures from a check-in in one call. Each entry is one of:
+def log_entries(debrief_id: int, entries: list[dict], raw_notes: Optional[str] = None) -> dict:
+    """Record habits and measures from a debrief in one call. Each entry is one of:
       habit:   {"target_type":"habit","target_id":"piano_drills","variant_id":"piano_drills:scales","result":"done"|"skipped","note":"..."}
       count:   same, plus "value": 2   (e.g. climbed twice)
       measure: {"target_type":"measure","target_id":"picking","value":3}  or  {"target_type":"measure","target_id":"phone_video","label":"some"}
     raw_notes = the gist of what she said, for later re-reading. Re-logging the same target replaces."""
     with session() as s:
-        ci = s.get(CheckIn, checkin_id)
+        ci = s.get(Debrief, debrief_id)
         if not ci:
-            return {"error": f"no checkin {checkin_id}"}
+            return {"error": f"no debrief {debrief_id}"}
         measures = {m.id: m for m in s.scalars(select(Measure)).all()}
         written, problems = 0, []
         for e in entries:
@@ -188,7 +195,7 @@ def log_entries(checkin_id: int, entries: list[dict], raw_notes: Optional[str] =
                     continue
             for old in s.scalars(select(Entry).where(Entry.day == ci.day, Entry.target_type == tt, Entry.target_id == tid)).all():
                 s.delete(old)
-            s.add(Entry(day=ci.day, checkin_id=ci.id, target_type=tt, target_id=tid,
+            s.add(Entry(day=ci.day, debrief_id=ci.id, target_type=tt, target_id=tid,
                         variant_id=e.get("variant_id"), result=e.get("result", "done") if tt == "habit" else None,
                         value=float(value) if value is not None else None, note=e.get("note")))
             written += 1
@@ -225,7 +232,7 @@ def get_arc(arc_id: str) -> dict:
 def update_action_items(arc_id: str, add: Optional[list[str]] = None, done: Optional[list[int]] = None,
                         dropped: Optional[list[int]] = None, note: Optional[str] = None, day: Optional[str] = None) -> dict:
     """Add new action items (texts) and/or close existing ones (ids) as done or dropped. Optional note is
-    saved as an arc update for the day. Use ids from start_checkin / get_arc; never invent them."""
+    saved as an arc update for the day. Use ids from start_debrief / get_arc; never invent them."""
     d = _parse(day)
     with session() as s:
         arc = s.get(Arc, arc_id)
@@ -373,8 +380,8 @@ def recent_history(days: int = 14, include: Optional[list[str]] = None) -> dict:
                                "result": e.result, "value": e.value, "note": e.note}
                               for e in s.scalars(select(Entry).where(Entry.day >= start).order_by(Entry.day.desc()))]
         if "notes" in want:
-            out["checkin_notes"] = [{"day": c.day.isoformat(), "raw": c.raw_notes}
-                                    for c in s.scalars(select(CheckIn).where(CheckIn.day >= start).order_by(CheckIn.day.desc())) if c.raw_notes]
+            out["debrief_notes"] = [{"day": c.day.isoformat(), "raw": c.raw_notes}
+                                    for c in s.scalars(select(Debrief).where(Debrief.day >= start).order_by(Debrief.day.desc())) if c.raw_notes]
         if "arc_notes" in want:
             out["arc_notes"] = [{"day": n.day.isoformat(), "arc": n.arc_id, "kind": n.kind, "text": n.text}
                                 for n in s.scalars(select(ArcNote).where(ArcNote.day >= start).order_by(ArcNote.day.desc()))]

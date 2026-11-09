@@ -44,18 +44,25 @@ def init_db() -> None:
 
     insp = inspect(engine)
     tables = set(insp.get_table_names())
-    if tables and "schema_version" not in tables:
+    current = None
+    if "schema_version" in tables:
         with engine.begin() as conn:
-            n = conn.execute(text("select count(*) from entries")).scalar() if "entries" in tables else 0
+            current = conn.execute(text("select max(version) from schema_version")).scalar()
+    if tables and current != SCHEMA_VERSION:
+        n = 0
+        with engine.begin() as conn:
+            if "entries" in tables:
+                n = conn.execute(text("select count(*) from entries")).scalar()
         if n:
             raise RuntimeError(
-                f"DB is schema v1 with {n} logged entries; refusing to auto-reset. Add a migration."
+                f"DB is schema v{current} with {n} logged entries; refusing to auto-reset. Add a migration."
             )
-        Base.metadata.drop_all(engine)
+        legacy = ("entries", "outcomes", "projects", "checkins", "debriefs", "reviews", "variants", "habits",
+                  "days", "measures", "arcs", "action_items", "arc_notes", "todos", "content_log", "schema_version")
         with engine.begin() as conn:
-            for legacy in ("entries", "outcomes", "projects", "checkins", "reviews", "variants", "habits", "days"):
-                conn.execute(text(f"drop table if exists {legacy} cascade" if engine.dialect.name == "postgresql"
-                                  else f"drop table if exists {legacy}"))
+            for t in legacy:
+                conn.execute(text(f"drop table if exists {t} cascade" if engine.dialect.name == "postgresql"
+                                  else f"drop table if exists {t}"))
     Base.metadata.create_all(engine)
     with session() as s:
         if not s.get(SchemaVersion, SCHEMA_VERSION):

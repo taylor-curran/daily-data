@@ -144,16 +144,22 @@ seed.sync(cfg)
 with session() as s_:
     assert s_.get(Arc, "WEDDING").status == "backburner"
 
-# ---- schema reset guard refuses when data exists
-from app import db as dbmod
-from sqlalchemy import text
+# ---- migrations: a pre-Alembic v4 DB is adopted in place with its data; re-running is a no-op
+from alembic.script import ScriptDirectory  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+
+from app import db as dbmod  # noqa: E402
+
 with dbmod.engine.begin() as conn:
-    conn.execute(text("drop table schema_version"))
-try:
-    dbmod.init_db()
-    raise SystemExit("reset guard should have refused")
-except RuntimeError as e:
-    assert "refusing" in str(e)
+    n_entries = conn.execute(text("select count(*) from entries")).scalar()
+    conn.execute(text("drop table alembic_version"))
+    conn.execute(text("insert into schema_version (version) values (4)"))
+dbmod.init_db()
+dbmod.init_db()
+head = ScriptDirectory.from_config(dbmod._alembic_config(None)).get_current_head()
+with dbmod.engine.begin() as conn:
+    assert conn.execute(text("select version_num from alembic_version")).scalar() == head
+    assert conn.execute(text("select count(*) from entries")).scalar() == n_entries > 0
 
 # ---- local date: 10pm Central = 04:00 UTC next day -> still today; 1:30am -> still yesterday
 os.environ.pop("FAKE_TODAY", None)

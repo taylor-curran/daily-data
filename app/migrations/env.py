@@ -22,6 +22,7 @@ def _migrate(conn) -> None:
         target_metadata=target_metadata,
         render_as_batch=conn.dialect.name == "sqlite",  # sqlite can't ALTER most things in place
         compare_type=True,
+        compare_server_default=True,
     )
     with context.begin_transaction():
         context.run_migrations()

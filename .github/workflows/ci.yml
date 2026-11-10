@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+
+      - name: Every model change has a migration
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci
+        run: |
+          alembic upgrade head
+          if ! alembic check; then
+            echo "::error::app/models.py changed without a migration. Run: alembic revision --autogenerate -m 'what changed' (see CLAUDE.md)"
+            exit 1
+          fi
+
+      - name: End-to-end test (Postgres)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci
+        run: python -m tests.test_e2e
+
+      - name: End-to-end test (SQLite)
+        env:
+          DATABASE_URL: sqlite:///./test.db
+        run: python -m tests.test_e2e

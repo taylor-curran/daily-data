@@ -1,5 +1,6 @@
 mcp>=2.0
 sqlalchemy>=2.0
+alembic>=1.13
 pyyaml
 psycopg2-binary
 uvicorn

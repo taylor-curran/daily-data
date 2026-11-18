@@ -31,42 +31,39 @@ engine = create_engine(DATABASE_URL, future=True, poolclass=NullPool, pool_pre_p
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def init_db() -> None:
-    """Create tables. One-time guarded reset from schema v1 (projects/outcomes) to v2.
+BASELINE_REVISION = "0001"  # schema v4, the last version before Alembic
+MIGRATION_LOCK = 724801  # arbitrary pg advisory-lock id
 
-    There is no migration tooling yet. v1 never held logged data, so if the DB is at v1 and
-    has no entries, drop it all and recreate. If it DOES have entries, refuse loudly rather
-    than lose anything — that's the point at which to add Alembic.
+
+def _alembic_config(conn):
+    from alembic.config import Config
+
+    cfg = Config()
+    cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "migrations"))
+    cfg.attributes["connection"] = conn
+    return cfg
+
+
+def init_db() -> None:
+    """Apply any pending Alembic migrations (app/migrations). Runs on every cold start; never drops data.
+
+    A database from before Alembic (has `schema_version` = 4, no `alembic_version`) is stamped at the
+    baseline revision first. On Postgres an advisory lock stops concurrent cold starts from racing.
     """
+    from alembic import command
     from sqlalchemy import inspect, text
 
-    from .models import SCHEMA_VERSION, SchemaVersion
-
-    insp = inspect(engine)
-    tables = set(insp.get_table_names())
-    current = None
-    if "schema_version" in tables:
-        with engine.begin() as conn:
-            current = conn.execute(text("select max(version) from schema_version")).scalar()
-    if tables and current != SCHEMA_VERSION:
-        n = 0
-        with engine.begin() as conn:
-            if "entries" in tables:
-                n = conn.execute(text("select count(*) from entries")).scalar()
-        if n:
-            raise RuntimeError(
-                f"DB is schema v{current} with {n} logged entries; refusing to auto-reset. Add a migration."
-            )
-        legacy = ("entries", "outcomes", "projects", "checkins", "debriefs", "reviews", "variants", "habits",
-                  "days", "measures", "arcs", "action_items", "arc_notes", "todos", "content_log", "schema_version")
-        with engine.begin() as conn:
-            for t in legacy:
-                conn.execute(text(f"drop table if exists {t} cascade" if engine.dialect.name == "postgresql"
-                                  else f"drop table if exists {t}"))
-    Base.metadata.create_all(engine)
-    with session() as s:
-        if not s.get(SchemaVersion, SCHEMA_VERSION):
-            s.add(SchemaVersion(version=SCHEMA_VERSION))
+    with engine.begin() as conn:
+        if conn.dialect.name == "postgresql":
+            conn.execute(text("select pg_advisory_xact_lock(:k)"), {"k": MIGRATION_LOCK})
+        cfg = _alembic_config(conn)
+        tables = set(inspect(conn).get_table_names())
+        if "alembic_version" not in tables and "schema_version" in tables:
+            v = conn.execute(text("select max(version) from schema_version")).scalar()
+            if v != 4:
+                raise RuntimeError(f"DB is pre-Alembic schema v{v}; only v4 can be adopted automatically.")
+            command.stamp(cfg, BASELINE_REVISION)
+        command.upgrade(cfg, "head")
 
 
 @contextmanager

@@ -64,9 +64,16 @@ runs until 4am (`DAY_START_HOUR`). `FAKE_TODAY=YYYY-MM-DD` fakes the clock.
 Vercel, Python runtime, Neon Postgres via the Storage tab (`DATABASE_URL`), `ACCESS_TOKEN` as a
 secret env var. Push to `main` deploys. `Dockerfile` / `fly.toml` remain for a non-serverless host.
 
-**Schema changes:** there is no migration tooling yet. `init_db` does a one-time guarded reset from
-the v1 schema (it refuses if any entries exist). The next schema change after data exists needs
-Alembic.
+**Schema changes:** Alembic migrations in `app/migrations/versions`. The server applies any pending
+ones itself on startup (`init_db`), so a push to `main` migrates Neon when Vercel deploys it. When you
+change `app/models.py`, add a migration in the same commit:
+
+```bash
+alembic revision --autogenerate -m "what changed"   # then read the file; renames come out as drop + add
+```
+
+CI (`.github/workflows/ci.yml`) fails if a model change has no migration, and runs the e2e test on
+Postgres and SQLite.
 
 ## Connect to claude.ai
 

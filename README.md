@@ -1,5 +1,7 @@
 # daily-data
 
+> **Note reading drill prototype:** see [`note-drill/README.md`](note-drill/README.md) for setup.
+
 A personal tracker that Claude voice mode talks to. One short debrief a day, a weekly review, and
 separate strategy conversations for the bigger threads. Lives at `https://daily-data-one.vercel.app`.
 

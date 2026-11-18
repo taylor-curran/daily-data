@@ -153,7 +153,7 @@ from app import db as dbmod  # noqa: E402
 with dbmod.engine.begin() as conn:
     n_entries = conn.execute(text("select count(*) from entries")).scalar()
     conn.execute(text("drop table alembic_version"))
-    conn.execute(text("insert into schema_version (version) values (4)"))
+    assert conn.execute(text("select max(version) from schema_version")).scalar() == 4
 dbmod.init_db()
 dbmod.init_db()
 head = ScriptDirectory.from_config(dbmod._alembic_config(None)).get_current_head()

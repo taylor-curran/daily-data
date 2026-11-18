@@ -69,10 +69,11 @@ def upgrade() -> None:
     sa.Column('reflection', sa.Text(), nullable=True),
     sa.PrimaryKeyConstraint('week_start')
     )
-    op.create_table('schema_version',
+    schema_version = op.create_table('schema_version',
     sa.Column('version', sa.Integer(), nullable=False),
     sa.PrimaryKeyConstraint('version')
     )
+    op.bulk_insert(schema_version, [{'version': 4}])  # so a rollback to pre-Alembic code sees v4, not an empty DB
     op.create_table('todos',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('text', sa.Text(), nullable=False),

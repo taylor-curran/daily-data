@@ -8,3 +8,5 @@
 - Never drop or recreate tables in `init_db`; it only runs `alembic upgrade head` on startup.
 - Run the tests before pushing: `DATABASE_URL=sqlite:///./test.db python -m tests.test_e2e`.
   CI also runs `alembic check`, which fails if a model change has no migration.
+- `alembic check` can't see `CheckConstraint`s (an Alembic autogenerate limit). Adding or changing one needs a
+  hand-written `op.create_check_constraint(...)` migration; CI won't flag it.
